@@ -7,6 +7,8 @@ import {
 import { TicketsRepository, type TicketDependencyEdge } from "../tickets/tickets.repo";
 import { GoalsRepository, type GoalList } from "./goals.repo";
 import type { Ticket } from "../../../shared/db/schema/tickets";
+import { AuditAction, AuditModule } from "../audit/audit.constants";
+import { AuditService } from "../audit/audit.service";
 
 type GoalPhase = NonNullable<Goal["phases"]>[number];
 export type StartRetrospectiveRequest = {
@@ -45,10 +47,15 @@ export class GoalsService {
   constructor(
     private readonly repository = new GoalsRepository(),
     private readonly ticketsRepository = new TicketsRepository(),
+    private readonly auditService = new AuditService(),
   ) {}
 
-  create(data: NewGoal): Promise<Goal> {
-    return this.repository.create(data);
+  async create(data: NewGoal): Promise<Goal> {
+    const goal = await this.repository.create(data);
+    await this.logGoalEvent(goal, AuditAction.CREATE, "Goal created", {
+      goal,
+    });
+    return goal;
   }
 
   findAll(page: number, limit: number): Promise<GoalList> {
@@ -135,29 +142,27 @@ export class GoalsService {
   }
 
   async update(id: string, data: Partial<NewGoal>): Promise<Goal> {
+    const existing = await this.findById(id);
     let patch = data;
     if (data.status === "paused") {
-      const current = await this.findById(id);
       patch = {
         ...data,
-        phases: updateActivePhase(current, "paused"),
+        phases: updateActivePhase(existing, "paused"),
       };
     }
     if (data.status === "cancelled") {
-      const current = await this.findById(id);
       patch = {
         ...data,
-        phases: updateActivePhase(current, "cancelled"),
+        phases: updateActivePhase(existing, "cancelled"),
         completedAt: new Date(),
       };
     }
     if (data.status === "completed") {
-      const current = await this.findById(id);
       patch = {
         ...data,
         completedAt: data.completedAt ?? new Date(),
         phases: updatePhase(
-          updatePhase(data.phases ?? current.phases, "planning", "completed"),
+          updatePhase(data.phases ?? existing.phases, "planning", "completed"),
           "execution",
           "completed",
         ),
@@ -165,6 +170,11 @@ export class GoalsService {
     }
     const goal = await this.repository.update(id, patch);
     if (!goal) throw new NotFoundError(`Goal with ID ${id} not found`);
+    await this.logGoalEvent(goal, AuditAction.UPDATE, "Goal updated", {
+      patch,
+      previousStatus: existing.status,
+      nextStatus: goal.status,
+    });
     return goal;
   }
 
@@ -184,6 +194,10 @@ export class GoalsService {
       phases: updatePhase(goal.phases, "planning", "in_progress"),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
+    await this.logGoalEvent(updated, AuditAction.START_PLANNING, "Planning started", {
+      previousStatus: goal.status,
+      nextStatus: updated.status,
+    });
     return updated;
   }
 
@@ -200,6 +214,11 @@ export class GoalsService {
       phases: updatePhase(goal.phases, "planning", "completed"),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
+    await this.logGoalEvent(updated, AuditAction.COMPLETE_PLANNING, "Planning completed", {
+      previousStatus: goal.status,
+      nextStatus: updated.status,
+      ticketCount,
+    });
     return updated;
   }
 
@@ -223,6 +242,10 @@ export class GoalsService {
       ),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
+    await this.logGoalEvent(updated, AuditAction.START_EXECUTION, "Execution started", {
+      previousStatus: goal.status,
+      nextStatus: updated.status,
+    });
     return updated;
   }
 
@@ -258,7 +281,16 @@ export class GoalsService {
       ),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
-    void request;
+    await this.logGoalEvent(
+      updated,
+      AuditAction.START_RETROSPECTIVE,
+      "Retrospective started",
+      {
+        previousStatus: goal.status,
+        nextStatus: updated.status,
+        userPoints: request.userPoints,
+      },
+    );
     void isPausedRetrospective;
     return updated;
   }
@@ -276,13 +308,45 @@ export class GoalsService {
       phases: updatePhase(goal.phases, "retrospective", "completed"),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
+    await this.logGoalEvent(
+      updated,
+      AuditAction.COMPLETE_RETROSPECTIVE,
+      "Retrospective completed",
+      {
+        previousStatus: goal.status,
+        nextStatus: updated.status,
+      },
+    );
     return updated;
   }
 
   async delete(id: string): Promise<Goal> {
     const goal = await this.repository.delete(id);
     if (!goal) throw new NotFoundError(`Goal with ID ${id} not found`);
+    await this.logGoalEvent(goal, AuditAction.DELETE, "Goal deleted", { goal });
     return goal;
+  }
+
+  private async logGoalEvent(
+    goal: Goal,
+    action: AuditAction,
+    description: string,
+    data: Record<string, unknown> = {},
+  ): Promise<void> {
+    await this.auditService.logChange(undefined, {
+      module: AuditModule.GOAL,
+      action,
+      entityName: "goal",
+      entityId: goal.id,
+      data: {
+        description,
+        goalId: goal.id,
+        goalTitle: goal.title,
+        projectId: goal.projectId,
+        status: goal.status,
+        ...data,
+      },
+    });
   }
 }
 

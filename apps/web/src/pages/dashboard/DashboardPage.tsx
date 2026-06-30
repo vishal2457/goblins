@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRealtimeDashboard } from "../../hooks/useRealtimeDashboard";
-import { type Ticket } from "@goblins/shared-constants";
+import { type AuditLog, type Ticket } from "@goblins/shared-constants";
 import { TicketDetailsDialog } from "../../components/TicketDetailsDialog";
 import { Badge } from "../../components/ui/badge";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -21,6 +21,7 @@ import {
 } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
+import { cn } from "../../lib/utils";
 import { KanbanColumn } from "./components/KanbanColumn";
 import {
   LayoutGrid,
@@ -35,6 +36,8 @@ import {
   Loader2,
   Info,
   Lightbulb,
+  ScrollText,
+  X,
 } from "lucide-react";
 
 export function DashboardPage() {
@@ -43,6 +46,8 @@ export function DashboardPage() {
     projects,
     goals,
     tickets,
+    auditLogs,
+    auditLogsLoading,
     boardSteps,
     loading,
     error,
@@ -60,7 +65,7 @@ export function DashboardPage() {
 
   const [viewingTicketDetails, setViewingTicketDetails] =
     useState<Ticket | null>(null);
-  const [isGoalDetailsOpen, setIsGoalDetailsOpen] = useState(false);
+  const [isGoalSheetOpen, setIsGoalSheetOpen] = useState(false);
   const [isRetrospectiveDialogOpen, setIsRetrospectiveDialogOpen] =
     useState(false);
   const [retrospectiveUserPoints, setRetrospectiveUserPoints] = useState("");
@@ -289,7 +294,7 @@ export function DashboardPage() {
               size="icon-sm"
               variant="ghost"
               title="View project and goal details"
-              onClick={() => setIsGoalDetailsOpen(true)}
+              onClick={() => setIsGoalSheetOpen(true)}
             >
               <Info className="h-3.5 w-3.5" />
             </Button>
@@ -483,43 +488,59 @@ export function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isGoalDetailsOpen} onOpenChange={setIsGoalDetailsOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-[700px] max-h-[80vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-0">
-          {selectedGoal && (
-            <div className="flex flex-col h-full overflow-hidden">
-              <DialogHeader className="px-6 py-4 border-b shrink-0 bg-muted/10">
-                <DialogTitle>Project and goal details</DialogTitle>
-              </DialogHeader>
-              <ScrollArea className="flex-1 min-h-0">
-                <div className="space-y-4 p-6">
-                  {selectedProject && (
-                    <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">
-                          Project
-                        </Label>
-                        <p className="mt-1 text-sm font-medium">
-                          {selectedProject.name}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">
-                          Project path
-                        </Label>
-                        <code className="mt-1 block rounded-md border bg-background px-2 py-1.5 text-xs font-mono break-all">
-                          {selectedProject.location}
-                        </code>
-                      </div>
+      {isGoalSheetOpen && selectedGoal && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <button
+            type="button"
+            aria-label="Close goal details"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setIsGoalSheetOpen(false)}
+          />
+          <aside className="relative flex h-full w-full max-w-[560px] flex-col border-l bg-background shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b bg-muted/10 px-5 py-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Target className="h-4 w-4 text-muted-foreground" />
+                  <span className="truncate">{selectedGoal.title}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Goal audit trail and execution context
+                </p>
+              </div>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                title="Close"
+                onClick={() => setIsGoalSheetOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-5 p-5">
+                {selectedProject && (
+                  <section className="space-y-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Project
+                      </Label>
+                      <p className="mt-1 text-sm font-medium">
+                        {selectedProject.name}
+                      </p>
                     </div>
-                  )}
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Goal
-                    </Label>
-                    <p className="mt-1 text-sm font-medium">
-                      {selectedGoal.title}
-                    </p>
-                  </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Project path
+                      </Label>
+                      <code className="mt-1 block rounded-md border bg-muted/20 px-2 py-1.5 text-xs font-mono break-all">
+                        {selectedProject.location}
+                      </code>
+                    </div>
+                  </section>
+                )}
+
+                <section className="space-y-3 border-t pt-5">
                   <div>
                     <Label className="text-xs text-muted-foreground">
                       Description
@@ -533,25 +554,33 @@ export function DashboardPage() {
                       <Label className="text-xs text-muted-foreground">
                         Technical instructions
                       </Label>
-                      <pre className="mt-1 max-h-56 overflow-auto rounded-md border bg-muted/20 p-3 text-xs whitespace-pre-wrap">
+                      <pre className="mt-1 max-h-48 overflow-auto rounded-md border bg-muted/20 p-3 text-xs whitespace-pre-wrap">
                         {selectedGoal.technicalInstructions}
                       </pre>
                     </div>
                   )}
-                </div>
-              </ScrollArea>
-              <DialogFooter className="border-t shrink-0">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsGoalDetailsOpen(false)}
-                >
-                  Close
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+                </section>
+
+                <section className="space-y-3 border-t pt-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <ScrollText className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold">Audit log</h3>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {auditLogs.length}
+                    </Badge>
+                  </div>
+                  <AuditTimeline
+                    logs={auditLogs}
+                    loading={auditLogsLoading}
+                  />
+                </section>
+              </div>
+            </ScrollArea>
+          </aside>
+        </div>
+      )}
 
       {/* Ticket Details Dialog */}
       <TicketDetailsDialog
@@ -561,4 +590,97 @@ export function DashboardPage() {
       />
     </div>
   );
+}
+
+function AuditTimeline({
+  logs,
+  loading,
+}: {
+  logs: AuditLog[];
+  loading: boolean;
+}) {
+  if (loading && logs.length === 0) {
+    return (
+      <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
+        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+        Loading audit log...
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+        No audit entries have been recorded for this goal yet.
+      </div>
+    );
+  }
+
+  return (
+    <ol className="space-y-3">
+      {logs.map((log) => (
+        <li key={log.id} className="relative pl-5">
+          <span className="absolute left-0 top-1.5 h-2 w-2 rounded-full bg-primary" />
+          <div className="rounded-md border bg-muted/15 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {auditTitle(log)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {new Date(log.createdAt).toLocaleString()}
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "shrink-0 text-[10px]",
+                  log.module === "ticket" && "border-blue-500/40 text-blue-600",
+                  log.module === "goal" && "border-green-500/40 text-green-600",
+                )}
+              >
+                {log.module}
+              </Badge>
+            </div>
+            <AuditDetails log={log} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function AuditDetails({ log }: { log: AuditLog }) {
+  const data = log.data ?? {};
+  const details = [
+    data.ticketTitle ? `Ticket: ${String(data.ticketTitle)}` : null,
+    data.previousStatus || data.nextStatus
+      ? `Status: ${String(data.previousStatus ?? "unknown")} -> ${String(
+          data.nextStatus ?? data.status ?? "unknown",
+        )}`
+      : null,
+    data.summary ? `Summary: ${String(data.summary)}` : null,
+    data.path ? `File: ${String(data.path)}` : null,
+  ].filter((detail): detail is string => Boolean(detail));
+
+  if (details.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      {details.map((detail) => (
+        <p key={detail}>{detail}</p>
+      ))}
+    </div>
+  );
+}
+
+function auditTitle(log: AuditLog): string {
+  const description = log.data?.description;
+  if (typeof description === "string" && description.trim()) {
+    return description;
+  }
+  return log.action
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/^\w/, (letter) => letter.toUpperCase());
 }

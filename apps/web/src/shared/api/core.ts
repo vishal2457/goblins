@@ -3,6 +3,7 @@ import type {
   BoardStep,
   DiscoveredAgent,
   DiscoveredAgentsResponse,
+  AuditLog,
   Goal,
   Project,
   ProjectModule,
@@ -495,6 +496,14 @@ export const legacyApi = {
     },
     comments: {
       list: listTicketComments,
+    },
+  },
+
+  auditLogs: {
+    listByGoal: async (goalId: string, limit = 100): Promise<AuditLog[]> => {
+      return fetchResult<AuditLog[]>(
+        `${API_PATHS.auditLogsByEntity("goal", goalId)}?limit=${limit}`,
+      );
     },
   },
 

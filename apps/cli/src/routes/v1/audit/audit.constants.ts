@@ -2,6 +2,14 @@ export const AuditAction = {
   CREATE: "CREATE",
   UPDATE: "UPDATE",
   DELETE: "DELETE",
+  START_PLANNING: "START_PLANNING",
+  COMPLETE_PLANNING: "COMPLETE_PLANNING",
+  START_EXECUTION: "START_EXECUTION",
+  START_RETROSPECTIVE: "START_RETROSPECTIVE",
+  COMPLETE_RETROSPECTIVE: "COMPLETE_RETROSPECTIVE",
+  STATUS_CHANGE: "STATUS_CHANGE",
+  REPORT: "REPORT",
+  APPEND_FILE: "APPEND_FILE",
   LOGIN: "LOGIN",
   LOGOUT: "LOGOUT",
   PASSWORD_RESET_REQUEST: "PASSWORD_RESET_REQUEST",
@@ -28,6 +36,9 @@ export const AuditModule = {
   NOTE: "note",
   FILE: "file",
   ENTITY_LINK: "entity_link",
+  GOAL: "goal",
+  TICKET: "ticket",
+  SYSTEM: "system",
 } as const;
 
 export type AuditModule = (typeof AuditModule)[keyof typeof AuditModule];

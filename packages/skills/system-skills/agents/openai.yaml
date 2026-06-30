@@ -1,0 +1,6 @@
+interface:
+  display_name: "Goblins"
+  short_description: "Coordinate goals with Goblins subagents"
+  default_prompt: "Use $goblins to plan and coordinate this larger goal with subagents."
+policy:
+  allow_implicit_invocation: false

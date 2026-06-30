@@ -265,12 +265,11 @@ export interface AuditLog {
   action: string;
   entityName: string;
   entityId?: string | null;
+  data?: Record<string, unknown> | null;
   userId?: string | null;
   userName?: string | null;
-  oldValue?: unknown;
-  newValue?: unknown;
   ipAddress?: string | null;
   userAgent?: string | null;
-  description?: string | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 }

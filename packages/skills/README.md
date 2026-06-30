@@ -4,5 +4,4 @@ This package folder contains reusable Goblins skill documentation.
 
 Available system skills:
 
-- `about-us`: concise context about the current Goblins product surface.
-- `api-docs`: local Goblins API documentation for projects, goals, tickets, comments, discovered subagents, and audit logs.
+- `goblins`: explicit-only orchestration workflow for large goals using Goblins goals, tickets, modules, native subagents, and API references in `system-skills/references/apis-docs`.

@@ -12,4 +12,5 @@ export const api = {
   tickets: ticketApi,
   realtime: realtimeApi,
   boardSteps: legacyApi.boardSteps,
+  auditLogs: legacyApi.auditLogs,
 };

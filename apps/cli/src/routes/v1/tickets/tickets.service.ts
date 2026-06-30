@@ -6,6 +6,8 @@ import {
 import { GoalsRepository } from "../goals/goals.repo";
 import { realtimeEvents } from "../events/events.bus";
 import { TicketsRepository, type TicketList } from "./tickets.repo";
+import { AuditAction, AuditModule } from "../audit/audit.constants";
+import { AuditService } from "../audit/audit.service";
 
 type TicketItemInput = {
   kind:
@@ -32,6 +34,7 @@ export class TicketsService {
   constructor(
     private readonly repository = new TicketsRepository(),
     private readonly goalsRepository = new GoalsRepository(),
+    private readonly auditService = new AuditService(),
   ) {}
 
   async create(data: CreateTicketRequest): Promise<Ticket> {
@@ -67,6 +70,11 @@ export class TicketsService {
       items.map((item, position) => ({ ...item, position })),
     );
     await this.repository.setDependencies(ticket.id, dependsOnTicketIds);
+    await this.logTicketEvent(ticket, AuditAction.CREATE, "Ticket created", {
+      ticket,
+      dependsOnTicketIds,
+      itemCount: items.length,
+    });
     realtimeEvents.publish("ticket.created", { ticket });
     return ticket;
   }
@@ -93,6 +101,11 @@ export class TicketsService {
     }
     const ticket = await this.repository.update(id, data);
     if (!ticket) throw new NotFoundError(`Ticket with ID ${id} not found`);
+    await this.logTicketEvent(ticket, AuditAction.UPDATE, "Ticket updated", {
+      patch: data,
+      previousStatus: existing.status,
+      nextStatus: ticket.status,
+    });
     realtimeEvents.publish("ticket.updated", {
       ticket,
       previousTicket: existing,
@@ -103,6 +116,9 @@ export class TicketsService {
   async delete(id: string): Promise<Ticket> {
     const ticket = await this.repository.delete(id);
     if (!ticket) throw new NotFoundError(`Ticket with ID ${id} not found`);
+    await this.logTicketEvent(ticket, AuditAction.DELETE, "Ticket deleted", {
+      ticket,
+    });
     realtimeEvents.publish("ticket.deleted", { ticket });
     return ticket;
   }
@@ -113,6 +129,9 @@ export class TicketsService {
       ticket.id,
       path.trim(),
     );
+    await this.logTicketEvent(ticket, AuditAction.APPEND_FILE, "Ticket file appended", {
+      path: item.value,
+    });
     return { path: item.value };
   }
 
@@ -140,6 +159,15 @@ export class TicketsService {
 
     const updated = await this.repository.update(id, nextPatch);
     if (!updated) throw new NotFoundError(`Ticket with ID ${id} not found`);
+    await this.logTicketEvent(updated, AuditAction.REPORT, "Ticket report accepted", {
+      reportStatus: data.status,
+      summary: data.summary,
+      evidence: data.evidence,
+      previousStatus: ticket.status,
+      nextStatus: updated.status,
+      retryCount: updated.retryCount,
+      maximumRetries: updated.maximumRetries,
+    });
     realtimeEvents.publish("ticket.updated", {
       ticket: updated,
       previousTicket: ticket,
@@ -159,12 +187,47 @@ export class TicketsService {
                   completedAt: phase.completedAt ?? new Date().toISOString(),
                 }
               : phase,
-          ),
+            ),
+        });
+        await this.auditService.logChange(undefined, {
+          module: AuditModule.GOAL,
+          action: AuditAction.STATUS_CHANGE,
+          entityName: "goal",
+          entityId: updated.goalId,
+          data: {
+            description: "Goal completed after all tickets finished",
+            goalId: updated.goalId,
+            previousStatus: goal.status,
+            nextStatus: "completed",
+            completedByTicketId: updated.id,
+          },
         });
       }
     }
 
     return updated;
+  }
+
+  private async logTicketEvent(
+    ticket: Ticket,
+    action: AuditAction,
+    description: string,
+    data: Record<string, unknown> = {},
+  ): Promise<void> {
+    await this.auditService.logChange(undefined, {
+      module: AuditModule.TICKET,
+      action,
+      entityName: "goal",
+      entityId: ticket.goalId,
+      data: {
+        description,
+        goalId: ticket.goalId,
+        ticketId: ticket.id,
+        ticketTitle: ticket.title,
+        status: ticket.status,
+        ...data,
+      },
+    });
   }
 
   private async ensureModuleBelongsToProject(

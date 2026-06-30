@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { useToast } from "../components/ui/toaster";
 import type {
+  AuditLog,
   BoardStep,
   DiscoveredAgent,
   DiscoveredAgentsResponse,
@@ -22,6 +23,8 @@ export function useRealtimeDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
   const [boardSteps, setBoardSteps] = useState<BoardStep[]>([]);
   const [discoveredAgents, setDiscoveredAgents] =
     useState<DiscoveredAgentsResponse | null>(null);
@@ -75,6 +78,28 @@ export function useRealtimeDashboard() {
     }
   }, [toast]);
 
+  const refreshAuditLogs = useCallback(
+    async (goalId = selectedGoalIdRef.current) => {
+      if (!goalId) {
+        setAuditLogs([]);
+        return;
+      }
+
+      setAuditLogsLoading(true);
+      try {
+        setAuditLogs(await api.auditLogs.listByGoal(goalId));
+      } catch (e) {
+        toast.error(
+          "Failed to load audit logs",
+          e instanceof Error ? e.message : "Failed to fetch audit logs",
+        );
+      } finally {
+        setAuditLogsLoading(false);
+      }
+    },
+    [toast],
+  );
+
   const scheduleRealtimeRefresh = useCallback(() => {
     if (refreshTimeoutRef.current) {
       window.clearTimeout(refreshTimeoutRef.current);
@@ -82,12 +107,17 @@ export function useRealtimeDashboard() {
     refreshTimeoutRef.current = window.setTimeout(() => {
       refreshTimeoutRef.current = null;
       void refresh({ force: true });
+      void refreshAuditLogs();
     }, REALTIME_REFRESH_DELAY_MS);
-  }, [refresh]);
+  }, [refresh, refreshAuditLogs]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    void refreshAuditLogs(selectedGoalId);
+  }, [refreshAuditLogs, selectedGoalId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof EventSource === "undefined")
@@ -323,6 +353,7 @@ export function useRealtimeDashboard() {
         setError(null);
         toast.success("Goal workflow started");
         await refresh({ force: true });
+        await refreshAuditLogs(goalId);
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "Failed to update goal phase";
@@ -330,7 +361,7 @@ export function useRealtimeDashboard() {
         toast.error("Failed to update goal phase", message);
       }
     },
-    [goals, refresh, toast],
+    [goals, refresh, refreshAuditLogs, toast],
   );
 
   const pauseGoal = useCallback(
@@ -339,13 +370,14 @@ export function useRealtimeDashboard() {
         await api.goals.pause(goalId);
         toast.success("Goal paused");
         await refresh({ force: true });
+        await refreshAuditLogs(goalId);
       } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to pause goal";
         setError(message);
         toast.error("Failed to pause goal", message);
       }
     },
-    [refresh, toast],
+    [refresh, refreshAuditLogs, toast],
   );
 
   const resumeGoal = useCallback(
@@ -354,13 +386,14 @@ export function useRealtimeDashboard() {
         await api.goals.resume(goalId);
         toast.success("Goal resumed");
         await refresh({ force: true });
+        await refreshAuditLogs(goalId);
       } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to resume goal";
         setError(message);
         toast.error("Failed to resume goal", message);
       }
     },
-    [refresh, toast],
+    [refresh, refreshAuditLogs, toast],
   );
 
   const cancelGoal = useCallback(
@@ -369,13 +402,14 @@ export function useRealtimeDashboard() {
         await api.goals.cancel(goalId);
         toast.success("Goal cancelled");
         await refresh({ force: true });
+        await refreshAuditLogs(goalId);
       } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to cancel goal";
         setError(message);
         toast.error("Failed to cancel goal", message);
       }
     },
-    [refresh, toast],
+    [refresh, refreshAuditLogs, toast],
   );
 
   const startRetrospective = useCallback(
@@ -390,6 +424,7 @@ export function useRealtimeDashboard() {
         setError(null);
         toast.success("Retrospective started");
         await refresh({ force: true });
+        await refreshAuditLogs(goalId);
         return goal;
       } catch (e) {
         const message =
@@ -399,7 +434,7 @@ export function useRealtimeDashboard() {
         return null;
       }
     },
-    [refresh, toast],
+    [refresh, refreshAuditLogs, toast],
   );
 
   const completeRetrospective = useCallback(
@@ -414,6 +449,7 @@ export function useRealtimeDashboard() {
         setError(null);
         toast.success("Retrospective completed");
         await refresh({ force: true });
+        await refreshAuditLogs(goalId);
         return goal;
       } catch (e) {
         const message =
@@ -423,7 +459,7 @@ export function useRealtimeDashboard() {
         return null;
       }
     },
-    [refresh, toast],
+    [refresh, refreshAuditLogs, toast],
   );
 
   const refreshDiscoveredAgents = useCallback(async () => {
@@ -490,6 +526,8 @@ export function useRealtimeDashboard() {
     projects,
     goals,
     tickets,
+    auditLogs,
+    auditLogsLoading,
     boardSteps,
     discoveredAgents,
     discoveredAgentsLoading,
@@ -512,6 +550,7 @@ export function useRealtimeDashboard() {
     completeRetrospective,
     refreshDiscoveredAgents,
     updateDiscoveredAgentInstructions,
+    refreshAuditLogs,
     refresh,
   };
 }

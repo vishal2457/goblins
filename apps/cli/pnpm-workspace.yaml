@@ -1,0 +1,9 @@
+packages:
+  - "."
+
+allowBuilds:
+  '@biomejs/biome': true
+  '@firebase/util': true
+  '@scarf/scarf': true
+  esbuild: true
+  protobufjs: true

@@ -1,0 +1,33 @@
+{
+  "name": "goblins",
+  "private": true,
+  "scripts": {
+    "build:aab": "cd apps/mobile && pnpm run build:aab",
+    "build:apk": "cd apps/mobile && pnpm run build:apk",
+    "build:apk:eas": "cd apps/mobile && pnpm run build:apk:eas",
+    "build": "turbo run build",
+    "build:cli": "pnpm --filter @goblins/shared-constants build && pnpm --filter goblins-fe build && pnpm --filter @goblins/goblins-cli build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "check-types": "turbo run check-types",
+    "release:desktop": "./scripts/release-desktop.sh patch",
+    "db:push": "pnpm --filter api db:push",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:start:dev": "pm2 start ecosystem.config.js --env development",
+    "pm2:stop": "pm2 delete ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:logs": "pm2 logs",
+    "pm2:status": "pm2 ls"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4",
+    "pm2": "^6.0.14",
+    "turbo": "^2.9.3",
+    "typescript": "5.9.2"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

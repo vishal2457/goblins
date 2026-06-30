@@ -1,10 +1,25 @@
-import { legacyApi } from "../../core";
+import {
+  createProject,
+  createProjectModule,
+  discoverProjectAgents,
+  getProject,
+  listProjectModules,
+  listProjects,
+  updateProject,
+  updateProjectAgentInstructions,
+} from "../../core";
 
 export const projectApi = {
-  list: legacyApi.projects.list,
-  get: legacyApi.projects.get,
-  create: legacyApi.projects.create,
-  update: legacyApi.projects.update,
-  modules: legacyApi.projects.modules,
-  agents: legacyApi.projects.agents,
+  list: listProjects,
+  get: getProject,
+  create: createProject,
+  update: updateProject,
+  modules: {
+    list: listProjectModules,
+    create: createProjectModule,
+  },
+  agents: {
+    discover: discoverProjectAgents,
+    updateInstructions: updateProjectAgentInstructions,
+  },
 };

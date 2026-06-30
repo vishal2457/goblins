@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   STATUS_LABELS,
   boardStepIdForTicketStatus,
@@ -7,7 +7,6 @@ import {
   type TicketComment,
   type TicketCommentKind,
 } from "@goblins/shared-constants";
-import { api } from "../lib/api";
 import { Badge } from "./ui/badge";
 import {
   Dialog,
@@ -29,6 +28,7 @@ import {
   CheckCircle,
   AlertOctagon,
 } from "lucide-react";
+import { useTicketCommentsQuery } from "../shared/api/features/ticket/ticket.queries";
 
 const COMMENT_KIND_META: Record<TicketCommentKind, { label: string; icon: React.ReactNode; badge: string }> = {
   note: {
@@ -54,30 +54,16 @@ const COMMENT_KIND_META: Record<TicketCommentKind, { label: string; icon: React.
 };
 
 function TicketCommentsPanel({ ticketId }: { ticketId: string }) {
-  const [comments, setComments] = useState<TicketComment[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const commentsQuery = useTicketCommentsQuery(ticketId);
+  const comments = commentsQuery.data;
+  const error =
+    commentsQuery.error instanceof Error
+      ? commentsQuery.error.message
+      : commentsQuery.error
+        ? "Failed to load comments"
+        : null;
 
-  useEffect(() => {
-    let cancelled = false;
-    setComments(null);
-    setError(null);
-    api.tickets.comments
-      .list(ticketId)
-      .then((data) => {
-        if (!cancelled) setComments(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setComments([]);
-          setError(err instanceof Error ? err.message : "Failed to load comments");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ticketId]);
-
-  if (comments === null) {
+  if (commentsQuery.isLoading) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -94,7 +80,7 @@ function TicketCommentsPanel({ ticketId }: { ticketId: string }) {
     );
   }
 
-  if (comments.length === 0) {
+  if (!comments || comments.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
         <MessageSquare className="h-6 w-6 opacity-50" />

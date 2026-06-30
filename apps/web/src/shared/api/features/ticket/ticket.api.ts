@@ -1,7 +1,13 @@
-import { legacyApi } from "../../core";
+import {
+  deleteTicket,
+  listModuleTickets,
+  listTicketComments,
+} from "../../core";
 
 export const ticketApi = {
-  listByModule: legacyApi.tickets.listByModule,
-  remove: legacyApi.tickets.remove,
-  comments: legacyApi.tickets.comments,
+  listByModule: listModuleTickets,
+  remove: deleteTicket,
+  comments: {
+    list: listTicketComments,
+  },
 };

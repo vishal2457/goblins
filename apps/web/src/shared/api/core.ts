@@ -1,26 +1,21 @@
 import { API_PATHS, STATIC_BOARD_STEPS } from "@goblins/shared-constants";
 import type {
+  AuditLog,
   BoardStep,
   DiscoveredAgent,
   DiscoveredAgentsResponse,
-  AuditLog,
   Goal,
   Project,
   ProjectModule,
   Ticket,
   TicketComment,
 } from "@goblins/shared-constants";
+import { apiClient } from "./client";
 
-const API_BASE =
-  import.meta.env.VITE_AGENT_SERVER_URL || "";
 const LIST_LIMIT = 100;
-const DASHBOARD_CACHE_TTL_MS = 1_000;
 
 type ApiEnvelope<T> = {
   result: T;
-  status: string;
-  statusCode: number;
-  msg: string;
 };
 
 type ApiList<T> = {
@@ -36,6 +31,7 @@ type ApiList<T> = {
 type DbProject = Omit<Project, "techPreferences"> & {
   techPreferences?: string[];
 };
+
 type DbGoal = Omit<
   Goal,
   | "constraints"
@@ -44,6 +40,7 @@ type DbGoal = Omit<
   | "outOfScopeItems"
   | "ticketIds"
 >;
+
 type DbTicket = Omit<
   Ticket,
   | "projectId"
@@ -57,7 +54,7 @@ type DbTicket = Omit<
   | "verificationCommands"
 > & { currentStepId: string | null };
 
-type ProjectUpdateInput = Partial<
+export type ProjectUpdateInput = Partial<
   Pick<Project, "name" | "location" | "baseBranch" | "executionMode">
 > & {
   description?: string | null;
@@ -67,48 +64,34 @@ type ProjectUpdateInput = Partial<
   buildCommand?: string | null;
 };
 
-type DashboardData = {
+export type GoalUpdateInput = Partial<
+  Pick<Goal, "title" | "description" | "technicalInstructions" | "maxRetries">
+>;
+
+export type DashboardData = {
   projects: Project[];
   goals: Goal[];
   tickets: Ticket[];
   boardSteps: BoardStep[];
 };
 
-type DashboardLoadOptions = {
-  force?: boolean;
-};
-
-let dashboardCache: { data: DashboardData; loadedAt: number } | null = null;
-let dashboardRequest: Promise<DashboardData> | null = null;
-
-function invalidateDashboardCache() {
-  dashboardCache = null;
+async function getResult<T>(url: string): Promise<T> {
+  const { data } = await apiClient.get<ApiEnvelope<T>>(url);
+  return data.result;
 }
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    let message = text;
-    try {
-      const parsed = JSON.parse(text) as { message?: string; msg?: string };
-      message = parsed.message || parsed.msg || text;
-    } catch {
-      message = text;
-    }
-    throw new Error(
-      `${res.status} ${res.statusText}${message ? `: ${message}` : ""}`,
-    );
-  }
-  return res.json();
+async function postResult<T>(url: string, body?: unknown): Promise<T> {
+  const { data } = await apiClient.post<ApiEnvelope<T>>(url, body);
+  return data.result;
 }
 
-async function fetchResult<T>(url: string, options?: RequestInit): Promise<T> {
-  const envelope = await fetchJson<ApiEnvelope<T>>(url, options);
-  return envelope.result;
+async function patchResult<T>(url: string, body?: unknown): Promise<T> {
+  const { data } = await apiClient.patch<ApiEnvelope<T>>(url, body);
+  return data.result;
+}
+
+async function deleteResult(url: string): Promise<void> {
+  await apiClient.delete(url);
 }
 
 function listUrl(path: string): string {
@@ -146,37 +129,19 @@ function mapTicket(ticket: DbTicket, projectId = ""): Ticket {
   };
 }
 
-async function listProjects(): Promise<Project[]> {
-  const result = await fetchResult<ApiList<DbProject>>(
-    listUrl(API_PATHS.projects),
-  );
-  return result.data.map(mapProject);
-}
-
-async function listProjectModules(projectId: string): Promise<ProjectModule[]> {
-  return fetchResult<ProjectModule[]>(API_PATHS.projectModules(projectId));
-}
-
-async function fetchGoalAndTicketLists(): Promise<
-  [ApiList<DbGoal>, ApiList<DbTicket>]
-> {
-  return Promise.all([
-    fetchResult<ApiList<DbGoal>>(listUrl(API_PATHS.goals)),
-    fetchResult<ApiList<DbTicket>>(listUrl(API_PATHS.tickets)),
-  ]);
-}
-
 function mapGoalsWithTickets(
   goalList: ApiList<DbGoal>,
   ticketList: ApiList<DbTicket>,
   projectId?: string,
 ): Goal[] {
   const ticketIdsByGoal = new Map<string, string[]>();
+
   for (const ticket of ticketList.data) {
     const ids = ticketIdsByGoal.get(ticket.goalId) || [];
     ids.push(ticket.id);
     ticketIdsByGoal.set(ticket.goalId, ids);
   }
+
   return goalList.data
     .filter((goal) => !projectId || goal.projectId === projectId)
     .map((goal) => mapGoal(goal, ticketIdsByGoal.get(goal.id) || []));
@@ -188,18 +153,210 @@ function mapTicketsWithGoals(
   goalId?: string,
 ): Ticket[] {
   const projectByGoal = new Map(goals.map((goal) => [goal.id, goal.projectId]));
+
   return ticketList.data
     .filter((ticket) => !goalId || ticket.goalId === goalId)
     .map((ticket) => mapTicket(ticket, projectByGoal.get(ticket.goalId) || ""));
 }
 
-async function listGoals(projectId?: string): Promise<Goal[]> {
+async function fetchGoalAndTicketLists(): Promise<
+  [ApiList<DbGoal>, ApiList<DbTicket>]
+> {
+  return Promise.all([
+    getResult<ApiList<DbGoal>>(listUrl(API_PATHS.goals)),
+    getResult<ApiList<DbTicket>>(listUrl(API_PATHS.tickets)),
+  ]);
+}
+
+export async function listProjects(): Promise<Project[]> {
+  const result = await getResult<ApiList<DbProject>>(listUrl(API_PATHS.projects));
+  return result.data.map(mapProject);
+}
+
+export async function getProject(id: string): Promise<Project> {
+  return mapProject(await getResult<DbProject>(API_PATHS.projectById(id)));
+}
+
+export async function createProject(data: {
+  name: string;
+  location: string;
+  description?: string;
+  techPreferences?: string[];
+  baseBranch?: string;
+  executionMode?: "direct" | "worktree";
+  testCommand?: string;
+  lintCommand?: string;
+  typeCheckCommand?: string;
+  buildCommand?: string;
+}): Promise<Project> {
+  return mapProject(
+    await postResult<DbProject>(API_PATHS.projects, {
+      ...data,
+      baseBranch: data.baseBranch || "main",
+      executionMode: data.executionMode || "direct",
+    }),
+  );
+}
+
+export async function updateProject(
+  id: string,
+  data: ProjectUpdateInput,
+): Promise<Project> {
+  return mapProject(
+    await patchResult<DbProject>(API_PATHS.projectById(id), data),
+  );
+}
+
+export async function listProjectModules(
+  projectId: string,
+): Promise<ProjectModule[]> {
+  return getResult<ProjectModule[]>(API_PATHS.projectModules(projectId));
+}
+
+export async function createProjectModule(
+  projectId: string,
+  data: { name: string; shortDescription?: string },
+): Promise<ProjectModule> {
+  return postResult<ProjectModule>(API_PATHS.projectModules(projectId), data);
+}
+
+export async function discoverProjectAgents(
+  projectId: string,
+): Promise<DiscoveredAgentsResponse> {
+  return getResult<DiscoveredAgentsResponse>(API_PATHS.projectAgents(projectId));
+}
+
+export async function updateProjectAgentInstructions(
+  projectId: string,
+  data: { agentId: string; instructions: string },
+): Promise<DiscoveredAgent> {
+  const { data: response } = await apiClient.put<ApiEnvelope<DiscoveredAgent>>(
+    API_PATHS.projectAgentInstructions(projectId),
+    data,
+  );
+
+  return response.result;
+}
+
+export async function listGoals(projectId?: string): Promise<Goal[]> {
   const [goalList, ticketList] = await fetchGoalAndTicketLists();
   return mapGoalsWithTickets(goalList, ticketList, projectId);
 }
 
-async function listTickets(goalId?: string): Promise<Ticket[]> {
+export async function getGoal(id: string): Promise<Goal> {
+  return mapGoal(await getResult<DbGoal>(API_PATHS.goalById(id)));
+}
+
+export async function createGoal(data: {
+  projectId: string;
+  title: string;
+  description?: string;
+  technicalInstructions?: string;
+  maxRetries?: number;
+}): Promise<Goal> {
+  return mapGoal(
+    await postResult<DbGoal>(API_PATHS.goals, {
+      projectId: data.projectId,
+      title: data.title,
+      description: data.description || "",
+      technicalInstructions: data.technicalInstructions,
+      maxRetries: data.maxRetries ?? 3,
+    }),
+  );
+}
+
+export async function updateGoal(
+  id: string,
+  data: GoalUpdateInput,
+): Promise<Goal> {
+  return mapGoal(await patchResult<DbGoal>(API_PATHS.goalById(id), data));
+}
+
+export async function startPlanningGoal(id: string): Promise<Goal> {
+  return mapGoal(await postResult<DbGoal>(API_PATHS.goalPlanningStart(id)));
+}
+
+export async function startExecutionGoal(id: string): Promise<Goal> {
+  return mapGoal(await postResult<DbGoal>(API_PATHS.goalExecutionStart(id)));
+}
+
+export async function startRetrospectiveGoal(
+  id: string,
+  userPoints?: string,
+): Promise<Goal> {
+  return mapGoal(
+    await postResult<DbGoal>(API_PATHS.goalRetrospectiveStart(id), {
+      userPoints,
+    }),
+  );
+}
+
+export async function completeRetrospectiveGoal(id: string): Promise<Goal> {
+  return mapGoal(
+    await postResult<DbGoal>(API_PATHS.goalRetrospectiveComplete(id)),
+  );
+}
+
+export async function pauseGoal(id: string): Promise<Goal> {
+  return mapGoal(
+    await patchResult<DbGoal>(API_PATHS.goalById(id), { status: "paused" }),
+  );
+}
+
+export async function resumeGoal(id: string): Promise<Goal> {
+  const goal = await getGoal(id);
+  const planningPhase = goal.phases.find((phase) => phase.id === "planning");
+  const executionPhase = goal.phases.find((phase) => phase.id === "execution");
+  const retrospectivePhase = goal.phases.find(
+    (phase) => phase.id === "retrospective",
+  );
+
+  if (
+    retrospectivePhase?.status === "paused" ||
+    retrospectivePhase?.status === "in_progress" ||
+    goal.status === "retrospective"
+  ) {
+    return startRetrospectiveGoal(id);
+  }
+
+  if (
+    executionPhase?.status === "paused" ||
+    executionPhase?.status === "in_progress" ||
+    planningPhase?.status === "completed"
+  ) {
+    return startExecutionGoal(id);
+  }
+
+  return startPlanningGoal(id);
+}
+
+export async function cancelGoal(id: string): Promise<Goal> {
+  return mapGoal(
+    await patchResult<DbGoal>(API_PATHS.goalById(id), {
+      status: "cancelled",
+    }),
+  );
+}
+
+export async function resetGoal(id: string): Promise<Goal> {
+  return mapGoal(
+    await patchResult<DbGoal>(API_PATHS.goalById(id), {
+      status: "draft",
+      phases: [
+        { id: "planning", status: "pending", position: 0 },
+        { id: "execution", status: "pending", position: 1 },
+        { id: "retrospective", status: "pending", position: 2 },
+      ],
+      startedAt: null,
+      completedAt: null,
+      lastError: null,
+    }),
+  );
+}
+
+export async function listGoalTickets(goalId?: string): Promise<Ticket[]> {
   const [goalList, ticketList] = await fetchGoalAndTicketLists();
+
   return mapTicketsWithGoals(
     ticketList,
     mapGoalsWithTickets(goalList, ticketList),
@@ -207,24 +364,48 @@ async function listTickets(goalId?: string): Promise<Ticket[]> {
   );
 }
 
-async function listTicketComments(
+export async function listModuleTickets(moduleId: string): Promise<Ticket[]> {
+  const tickets = await getResult<DbTicket[]>(API_PATHS.moduleTickets(moduleId));
+  return tickets.map((ticket) => mapTicket(ticket));
+}
+
+export async function deleteTicket(id: string): Promise<void> {
+  await deleteResult(API_PATHS.ticketById(id));
+}
+
+export async function listTicketComments(
   ticketId: string,
   page = 1,
   limit = 100,
 ): Promise<TicketComment[]> {
-  const result = await fetchResult<ApiList<TicketComment>>(
+  const result = await getResult<ApiList<TicketComment>>(
     `${API_PATHS.ticketComments(ticketId)}?page=${page}&limit=${limit}`,
   );
+
   return result.data;
 }
 
-async function fetchDashboardData(): Promise<DashboardData> {
+export async function listGoalAuditLogs(
+  goalId: string,
+  limit = 100,
+): Promise<AuditLog[]> {
+  return getResult<AuditLog[]>(
+    `${API_PATHS.auditLogsByEntity("goal", goalId)}?limit=${limit}`,
+  );
+}
+
+export async function listBoardSteps(_projectId?: string): Promise<BoardStep[]> {
+  return STATIC_BOARD_STEPS;
+}
+
+export async function loadDashboardData(): Promise<DashboardData> {
   const [projects, goalList, ticketList] = await Promise.all([
     listProjects(),
-    fetchResult<ApiList<DbGoal>>(listUrl(API_PATHS.goals)),
-    fetchResult<ApiList<DbTicket>>(listUrl(API_PATHS.tickets)),
+    getResult<ApiList<DbGoal>>(listUrl(API_PATHS.goals)),
+    getResult<ApiList<DbTicket>>(listUrl(API_PATHS.tickets)),
   ]);
   const goals = mapGoalsWithTickets(goalList, ticketList);
+
   return {
     projects,
     goals,
@@ -232,285 +413,3 @@ async function fetchDashboardData(): Promise<DashboardData> {
     boardSteps: STATIC_BOARD_STEPS,
   };
 }
-
-async function loadDashboardData(
-  options: DashboardLoadOptions = {},
-): Promise<DashboardData> {
-  if (!options.force) {
-    if (
-      dashboardCache &&
-      Date.now() - dashboardCache.loadedAt < DASHBOARD_CACHE_TTL_MS
-    ) {
-      return dashboardCache.data;
-    }
-    if (dashboardRequest) return dashboardRequest;
-  }
-
-  dashboardRequest = fetchDashboardData().then((data) => {
-    dashboardCache = { data, loadedAt: Date.now() };
-    return data;
-  });
-
-  try {
-    return await dashboardRequest;
-  } finally {
-    dashboardRequest = null;
-  }
-}
-
-export const legacyApi = {
-  projects: {
-    list: listProjects,
-    get: async (id: string) =>
-      mapProject(await fetchResult<DbProject>(API_PATHS.projectById(id))),
-    create: async (data: {
-      name: string;
-      location: string;
-      description?: string;
-      techPreferences?: string[];
-      baseBranch?: string;
-      executionMode?: "direct" | "worktree";
-      testCommand?: string;
-      lintCommand?: string;
-      typeCheckCommand?: string;
-      buildCommand?: string;
-    }) => {
-      const project = mapProject(
-        await fetchResult<DbProject>(API_PATHS.projects, {
-          method: "POST",
-          body: JSON.stringify({
-            ...data,
-            baseBranch: data.baseBranch || "main",
-            executionMode: data.executionMode || "direct",
-          }),
-        }),
-      );
-      invalidateDashboardCache();
-      return project;
-    },
-    update: async (id: string, data: ProjectUpdateInput) => {
-      const project = mapProject(
-        await fetchResult<DbProject>(API_PATHS.projectById(id), {
-          method: "PATCH",
-          body: JSON.stringify(data),
-        }),
-      );
-      invalidateDashboardCache();
-      return project;
-    },
-    modules: {
-      list: listProjectModules,
-      create: async (
-        projectId: string,
-        data: { name: string; shortDescription?: string },
-      ) => {
-        const projectModule = await fetchResult<ProjectModule>(
-          API_PATHS.projectModules(projectId),
-          {
-            method: "POST",
-            body: JSON.stringify(data),
-          },
-        );
-        invalidateDashboardCache();
-        return projectModule;
-      },
-    },
-    agents: {
-      discover: (projectId: string) =>
-        fetchResult<DiscoveredAgentsResponse>(API_PATHS.projectAgents(projectId)),
-      updateInstructions: (
-        projectId: string,
-        data: { agentId: string; instructions: string },
-      ) =>
-        fetchResult<DiscoveredAgent>(
-          API_PATHS.projectAgentInstructions(projectId),
-          {
-            method: "PUT",
-            body: JSON.stringify(data),
-          },
-        ),
-    },
-  },
-
-  goals: {
-    list: listGoals,
-    get: async (id: string) =>
-      mapGoal(await fetchResult<DbGoal>(API_PATHS.goalById(id))),
-    create: async (data: {
-      projectId: string;
-      title: string;
-      description?: string;
-      technicalInstructions?: string;
-      maxRetries?: number;
-    }) => {
-      const goal = mapGoal(
-        await fetchResult<DbGoal>(API_PATHS.goals, {
-          method: "POST",
-          body: JSON.stringify({
-            projectId: data.projectId,
-            title: data.title,
-            description: data.description || "",
-            technicalInstructions: data.technicalInstructions,
-            maxRetries: data.maxRetries ?? 3,
-          }),
-        }),
-      );
-      invalidateDashboardCache();
-      return goal;
-    },
-    update: async (
-      id: string,
-      data: Partial<
-        Pick<
-          Goal,
-          "title" | "description" | "technicalInstructions" | "maxRetries"
-        >
-      >,
-    ) => {
-      const goal = mapGoal(
-        await fetchResult<DbGoal>(API_PATHS.goalById(id), {
-          method: "PATCH",
-          body: JSON.stringify(data),
-        }),
-      );
-      invalidateDashboardCache();
-      return goal;
-    },
-    startPlanning: async (id: string) => {
-      const goal = mapGoal(
-        await fetchResult<DbGoal>(API_PATHS.goalPlanningStart(id), {
-          method: "POST",
-        }),
-      );
-      invalidateDashboardCache();
-      return goal;
-    },
-    startExecution: async (id: string) => {
-      const goal = mapGoal(
-        await fetchResult<DbGoal>(API_PATHS.goalExecutionStart(id), {
-          method: "POST",
-        }),
-      );
-      invalidateDashboardCache();
-      return goal;
-    },
-    startRetrospective: async (id: string, userPoints?: string) => {
-      const goal = mapGoal(
-        await fetchResult<DbGoal>(API_PATHS.goalRetrospectiveStart(id), {
-          method: "POST",
-          body: JSON.stringify({ userPoints }),
-        }),
-      );
-      invalidateDashboardCache();
-      return goal;
-    },
-    completeRetrospective: async (id: string) => {
-      const goal = mapGoal(
-        await fetchResult<DbGoal>(API_PATHS.goalRetrospectiveComplete(id), {
-          method: "POST",
-        }),
-      );
-      invalidateDashboardCache();
-      return goal;
-    },
-    pause: async (id: string) => {
-      const goal = await fetchResult<DbGoal>(API_PATHS.goalById(id), {
-        method: "PATCH",
-        body: JSON.stringify({ status: "paused" }),
-      }).then((goal) => mapGoal(goal));
-      invalidateDashboardCache();
-      return goal;
-    },
-    resume: async (id: string) => {
-      const goal = mapGoal(await fetchResult<DbGoal>(API_PATHS.goalById(id)));
-      const planningPhase = goal.phases.find(
-        (phase) => phase.id === "planning",
-      );
-      const executionPhase = goal.phases.find(
-        (phase) => phase.id === "execution",
-      );
-      const retrospectivePhase = goal.phases.find(
-        (phase) => phase.id === "retrospective",
-      );
-      if (
-        retrospectivePhase?.status === "paused" ||
-        retrospectivePhase?.status === "in_progress" ||
-        goal.status === "retrospective"
-      ) {
-        return legacyApi.goals.startRetrospective(id);
-      }
-      if (
-        executionPhase?.status === "paused" ||
-        executionPhase?.status === "in_progress" ||
-        planningPhase?.status === "completed"
-      ) {
-        return legacyApi.goals.startExecution(id);
-      }
-      return legacyApi.goals.startPlanning(id);
-    },
-    cancel: async (id: string) => {
-      const goal = await fetchResult<DbGoal>(API_PATHS.goalById(id), {
-        method: "PATCH",
-        body: JSON.stringify({ status: "cancelled" }),
-      }).then(mapGoal);
-      invalidateDashboardCache();
-      return goal;
-    },
-    reset: async (id: string) => {
-      const goal = await fetchResult<DbGoal>(API_PATHS.goalById(id), {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: "draft",
-          phases: [
-            { id: "planning", status: "pending", position: 0 },
-            { id: "execution", status: "pending", position: 1 },
-            { id: "retrospective", status: "pending", position: 2 },
-          ],
-          startedAt: null,
-          completedAt: null,
-          lastError: null,
-        }),
-      }).then(mapGoal);
-      invalidateDashboardCache();
-      return goal;
-    },
-    tickets: { list: listTickets },
-  },
-
-  dashboard: {
-    load: loadDashboardData,
-    invalidate: invalidateDashboardCache,
-  },
-
-  tickets: {
-    listByModule: async (moduleId: string) =>
-      (await fetchResult<DbTicket[]>(API_PATHS.moduleTickets(moduleId))).map(
-        (ticket) => mapTicket(ticket),
-      ),
-    remove: async (id: string) => {
-      const response = await fetch(`${API_BASE}${API_PATHS.ticketById(id)}`, {
-        method: "DELETE",
-      });
-      if (response.ok) invalidateDashboardCache();
-      return response;
-    },
-    comments: {
-      list: listTicketComments,
-    },
-  },
-
-  auditLogs: {
-    listByGoal: async (goalId: string, limit = 100): Promise<AuditLog[]> => {
-      return fetchResult<AuditLog[]>(
-        `${API_PATHS.auditLogsByEntity("goal", goalId)}?limit=${limit}`,
-      );
-    },
-  },
-
-  boardSteps: {
-    list: async (projectId?: string) => {
-      void projectId;
-      return STATIC_BOARD_STEPS;
-    },
-  },
-};

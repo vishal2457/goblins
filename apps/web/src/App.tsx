@@ -2,8 +2,11 @@ import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { Bot, House, Settings as SettingsIcon } from "lucide-react";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
+import { useRealtimeTicketEvents } from "./shared/api/features/realtime/realtime.queries";
 
 export default function App() {
+  useRealtimeTicketEvents();
+
   return (
     <main className="theme-scrollbar flex h-screen flex-col overflow-hidden bg-background text-foreground">
         <header className="flex h-16 shrink-0 items-center justify-between border-b px-6">

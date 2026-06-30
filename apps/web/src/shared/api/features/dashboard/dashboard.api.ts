@@ -1,5 +1,15 @@
-import { legacyApi } from "../../core";
+import {
+  listBoardSteps,
+  listGoalAuditLogs,
+  loadDashboardData,
+} from "../../core";
 
 export const dashboardApi = {
-  load: legacyApi.dashboard.load,
+  load: loadDashboardData,
+  boardSteps: {
+    list: listBoardSteps,
+  },
+  auditLogs: {
+    listByGoal: listGoalAuditLogs,
+  },
 };

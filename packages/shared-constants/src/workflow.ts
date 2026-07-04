@@ -7,6 +7,7 @@ import type {
   PlanningFlowStep,
   StepColor,
   TicketPriority,
+  TicketSubagentStatus,
   TicketStatus,
 } from "./types.js";
 
@@ -147,6 +148,13 @@ export const STATUS_COLORS: Record<string, string> = {
   failed: "border-red-500 bg-red-500/10 text-red-700",
   blocked: "border-amber-500/50 text-amber-700",
   cancelled: "border-muted-foreground/30 text-muted-foreground",
+};
+
+export const SUBAGENT_STATUS_LABELS: Record<TicketSubagentStatus, string> = {
+  analysing: "Analysing",
+  executing: "Executing",
+  verifying: "Verifying",
+  done: "Done",
 };
 
 export const PRIORITY_COLORS: Record<TicketPriority, string> = {

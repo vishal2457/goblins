@@ -40,6 +40,12 @@ export const ticketPriorityEnum = pgEnum("ticket_priority", [
   "high",
   "critical",
 ]);
+export const ticketSubagentStatusEnum = pgEnum("ticket_subagent_status", [
+  "analysing",
+  "executing",
+  "verifying",
+  "done",
+]);
 
 export const tickets = pgTable(
   "tickets",
@@ -60,6 +66,13 @@ export const tickets = pgTable(
     priority: ticketPriorityEnum("priority").notNull().default("medium"),
     retryCount: integer("retry_count").notNull().default(0),
     maximumRetries: integer("maximum_retries").notNull().default(3),
+    assignedSubagentName: text("assigned_subagent_name"),
+    subagentStatus: ticketSubagentStatusEnum("subagent_status"),
+    subagentStatusUpdatedAt: timestamp("subagent_status_updated_at", {
+      withTimezone: true,
+    }),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    lastActivityByAgentName: text("last_activity_by_agent_name"),
     worktreePath: text("worktree_path"),
     branchName: text("branch_name"),
     startedAt: timestamp("started_at", { withTimezone: true }),

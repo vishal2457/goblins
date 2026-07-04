@@ -1,7 +1,6 @@
 export type {
   AuditLog,
   BoardStep,
-  ExecutionMode,
   Goal,
   GoalPhase,
   GoalPhaseId,

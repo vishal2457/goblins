@@ -5,7 +5,11 @@ import {
 } from "../../../shared/utils/http-errors.util";
 import { GoalsRepository } from "../goals/goals.repo";
 import { realtimeEvents } from "../events/events.bus";
-import { TicketsRepository, type TicketList } from "./tickets.repo";
+import {
+  TicketsRepository,
+  type TicketList,
+  type TicketWithActivity,
+} from "./tickets.repo";
 import { AuditAction, AuditModule } from "../audit/audit.constants";
 import { AuditService } from "../audit/audit.service";
 
@@ -20,6 +24,7 @@ type TicketItemInput = {
 };
 
 export type CreateTicketRequest = NewTicket & {
+  activityAuthorName?: string | null;
   dependsOnTicketIds?: string[];
   items?: TicketItemInput[];
 };
@@ -28,6 +33,7 @@ export interface TicketReportRequest {
   status: "completed" | "failed" | "blocked";
   summary?: string;
   evidence?: string[];
+  activityAuthorName?: string | null;
 }
 
 export class TicketsService {
@@ -37,8 +43,13 @@ export class TicketsService {
     private readonly auditService = new AuditService(),
   ) {}
 
-  async create(data: CreateTicketRequest): Promise<Ticket> {
-    const { dependsOnTicketIds = [], items = [], ...ticketData } = data;
+  async create(data: CreateTicketRequest): Promise<TicketWithActivity> {
+    const {
+      activityAuthorName,
+      dependsOnTicketIds = [],
+      items = [],
+      ...ticketData
+    } = data;
     const goal = await this.repository.findGoal(ticketData.goalId);
     if (!goal)
       throw new NotFoundError(`Goal with ID ${ticketData.goalId} not found`);
@@ -59,9 +70,16 @@ export class TicketsService {
     }
 
     const hasIncompleteDeps = dependsOnTicketIds.length > 0;
+    const now = new Date();
     const ticket = await this.repository.create({
       ...ticketData,
       currentStepId: null,
+      lastActivityAt: ticketData.lastActivityAt ?? now,
+      lastActivityByAgentName:
+        activityAuthorName?.trim() ||
+        ticketData.lastActivityByAgentName ||
+        ticketData.assignedSubagentName ||
+        null,
       status: ticketData.status ?? (hasIncompleteDeps ? "blocked" : "backlog"),
       maximumRetries: ticketData.maximumRetries ?? goal.maxRetries,
     });
@@ -76,41 +94,55 @@ export class TicketsService {
       itemCount: items.length,
     });
     realtimeEvents.publish("ticket.created", { ticket });
-    return ticket;
+    const created = await this.repository.findById(ticket.id);
+    if (!created) throw new NotFoundError(`Ticket with ID ${ticket.id} not found`);
+    return created;
   }
 
   findAll(page: number, limit: number): Promise<TicketList> {
     return this.repository.findAll(page, limit);
   }
 
-  async findById(id: string): Promise<Ticket> {
+  async findById(id: string): Promise<TicketWithActivity> {
     const ticket = await this.repository.findById(id);
     if (!ticket) throw new NotFoundError(`Ticket with ID ${id} not found`);
     return ticket;
   }
 
-  async update(id: string, data: Partial<NewTicket>): Promise<Ticket> {
+  async update(
+    id: string,
+    data: Partial<NewTicket> & { activityAuthorName?: string | null },
+  ): Promise<TicketWithActivity> {
+    const { activityAuthorName, ...ticketData } = data;
     const existing = await this.repository.findById(id);
     if (!existing) throw new NotFoundError(`Ticket with ID ${id} not found`);
-    if (data.goalId || data.moduleId) {
-      const goalId = data.goalId ?? existing.goalId;
-      const moduleId = data.moduleId ?? existing.moduleId;
+    if (ticketData.goalId || ticketData.moduleId) {
+      const goalId = ticketData.goalId ?? existing.goalId;
+      const moduleId = ticketData.moduleId ?? existing.moduleId;
       const goal = await this.goalsRepository.findById(goalId);
       if (!goal) throw new NotFoundError(`Goal with ID ${goalId} not found`);
       await this.ensureModuleBelongsToProject(moduleId, goal.projectId);
     }
-    const ticket = await this.repository.update(id, data);
+    const patch = this.withActivityPatch(
+      existing,
+      ticketData,
+      activityAuthorName,
+    );
+    const ticket = await this.repository.update(id, patch);
     if (!ticket) throw new NotFoundError(`Ticket with ID ${id} not found`);
     await this.logTicketEvent(ticket, AuditAction.UPDATE, "Ticket updated", {
-      patch: data,
+      patch,
+      activityAuthorName,
       previousStatus: existing.status,
       nextStatus: ticket.status,
+      previousSubagentStatus: existing.subagentStatus,
+      nextSubagentStatus: ticket.subagentStatus,
     });
     realtimeEvents.publish("ticket.updated", {
       ticket,
       previousTicket: existing,
     });
-    return ticket;
+    return this.findById(id);
   }
 
   async delete(id: string): Promise<Ticket> {
@@ -135,7 +167,10 @@ export class TicketsService {
     return { path: item.value };
   }
 
-  async report(id: string, data: TicketReportRequest): Promise<Ticket> {
+  async report(
+    id: string,
+    data: TicketReportRequest,
+  ): Promise<TicketWithActivity> {
     const ticket = await this.findById(id);
     const goal = await this.goalsRepository.findById(ticket.goalId);
     if (!goal)
@@ -145,6 +180,7 @@ export class TicketsService {
     if (data.status === "completed") {
       nextPatch = {
         status: "completed",
+        subagentStatus: "done",
         completedAt: new Date(),
       };
     } else if (data.status === "failed") {
@@ -157,14 +193,20 @@ export class TicketsService {
       nextPatch = { status: "blocked" };
     }
 
-    const updated = await this.repository.update(id, nextPatch);
+    const updated = await this.repository.update(
+      id,
+      this.withActivityPatch(ticket, nextPatch, data.activityAuthorName),
+    );
     if (!updated) throw new NotFoundError(`Ticket with ID ${id} not found`);
     await this.logTicketEvent(updated, AuditAction.REPORT, "Ticket report accepted", {
       reportStatus: data.status,
       summary: data.summary,
       evidence: data.evidence,
+      activityAuthorName: data.activityAuthorName,
       previousStatus: ticket.status,
       nextStatus: updated.status,
+      previousSubagentStatus: ticket.subagentStatus,
+      nextSubagentStatus: updated.subagentStatus,
       retryCount: updated.retryCount,
       maximumRetries: updated.maximumRetries,
     });
@@ -205,7 +247,37 @@ export class TicketsService {
       }
     }
 
-    return updated;
+    return this.findById(id);
+  }
+
+  private withActivityPatch(
+    existing: Ticket,
+    data: Partial<NewTicket>,
+    activityAuthorName?: string | null,
+  ): Partial<NewTicket> {
+    const patch: Partial<NewTicket> = { ...data };
+    const subagentStatusChanged =
+      "subagentStatus" in data && data.subagentStatus !== existing.subagentStatus;
+    const activityChanged = [
+      "status",
+      "subagentStatus",
+      "assignedSubagentName",
+      "worktreePath",
+      "branchName",
+      "startedAt",
+      "completedAt",
+    ].some((key) => key in data);
+
+    if (subagentStatusChanged) {
+      patch.subagentStatusUpdatedAt = new Date();
+    }
+    if (activityChanged) {
+      patch.lastActivityAt = new Date();
+      patch.lastActivityByAgentName =
+        activityAuthorName?.trim() || existing.lastActivityByAgentName || null;
+    }
+
+    return patch;
   }
 
   private async logTicketEvent(

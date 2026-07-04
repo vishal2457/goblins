@@ -226,45 +226,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "base_branch": {
-          "name": "base_branch",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'main'"
-        },
-        "execution_mode": {
-          "name": "execution_mode",
-          "type": "execution_mode",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'direct'"
-        },
-        "test_command": {
-          "name": "test_command",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lint_command": {
-          "name": "lint_command",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "type_check_command": {
-          "name": "type_check_command",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "build_command": {
-          "name": "build_command",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1494,14 +1455,6 @@
     }
   },
   "enums": {
-    "public.execution_mode": {
-      "name": "execution_mode",
-      "schema": "public",
-      "values": [
-        "direct",
-        "worktree"
-      ]
-    },
     "public.step_color": {
       "name": "step_color",
       "schema": "public",

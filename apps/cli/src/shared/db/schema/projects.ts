@@ -1,18 +1,12 @@
 import {
   index,
   integer,
-  pgEnum,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-
-export const executionModeEnum = pgEnum("execution_mode", [
-  "direct",
-  "worktree",
-]);
 
 export const projects = pgTable(
   "projects",
@@ -21,14 +15,6 @@ export const projects = pgTable(
     name: text("name").notNull(),
     location: text("location").notNull(),
     description: text("description"),
-    baseBranch: text("base_branch").notNull().default("main"),
-    executionMode: executionModeEnum("execution_mode")
-      .notNull()
-      .default("direct"),
-    testCommand: text("test_command"),
-    lintCommand: text("lint_command"),
-    typeCheckCommand: text("type_check_command"),
-    buildCommand: text("build_command"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

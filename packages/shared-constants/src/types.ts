@@ -61,10 +61,14 @@ export type TicketStatus =
 
 export type TicketPriority = "low" | "medium" | "high" | "critical";
 
+export type TicketSubagentStatus =
+  | "analysing"
+  | "executing"
+  | "verifying"
+  | "done";
+
 export type StepColor = "slate" | "blue" | "amber" | "green" | "red";
 export type BoardStepId = "todo" | "inprogress" | "done" | "failed";
-
-export type ExecutionMode = "direct" | "worktree";
 
 export type DiscoveredAgentProvider = "codex" | "claude" | "cursor" | "opencode";
 export type DiscoveredAgentScope = "project" | "user";
@@ -95,12 +99,6 @@ export interface Project {
   location: string;
   description?: string;
   techPreferences: string[];
-  baseBranch: string;
-  executionMode?: ExecutionMode;
-  testCommand?: string;
-  lintCommand?: string;
-  typeCheckCommand?: string;
-  buildCommand?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -209,10 +207,24 @@ export interface Ticket {
   verificationCommands: string[];
   retryCount: number;
   maximumRetries: number;
+  assignedSubagentName?: string | null;
+  subagentStatus?: TicketSubagentStatus | null;
+  subagentStatusUpdatedAt?: string | null;
+  lastActivityAt?: string | null;
+  lastActivityByAgentName?: string | null;
+  activity?: TicketActivity;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
+}
+
+export interface TicketActivity {
+  lastActivityAt?: string | null;
+  lastActivityAgeMs?: number | null;
+  lastActivityByAgentName?: string | null;
+  commentCount: number;
+  recentComments: TicketComment[];
 }
 
 export interface TicketStepExecution {

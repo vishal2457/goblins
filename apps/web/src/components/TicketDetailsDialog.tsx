@@ -1,8 +1,10 @@
 import React from "react";
 import {
   STATUS_LABELS,
+  SUBAGENT_STATUS_LABELS,
   boardStepIdForTicketStatus,
   type BoardStep,
+  type BoardStepId,
   type Ticket,
   type TicketComment,
   type TicketCommentKind,
@@ -17,6 +19,13 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
   FileCode,
@@ -27,8 +36,12 @@ import {
   HelpCircle,
   CheckCircle,
   AlertOctagon,
+  Bot,
 } from "lucide-react";
-import { useTicketCommentsQuery } from "../shared/api/features/ticket/ticket.queries";
+import {
+  useSettleTicketMutation,
+  useTicketCommentsQuery,
+} from "../shared/api/features/ticket/ticket.queries";
 
 const COMMENT_KIND_META: Record<TicketCommentKind, { label: string; icon: React.ReactNode; badge: string }> = {
   note: {
@@ -52,6 +65,16 @@ const COMMENT_KIND_META: Record<TicketCommentKind, { label: string; icon: React.
     badge: "bg-red-500/10 text-red-600 border-red-500/30",
   },
 };
+
+function formatActivityAge(ageMs?: number | null): string {
+  if (ageMs == null) return "Unknown";
+  const minutes = Math.floor(ageMs / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 function TicketCommentsPanel({ ticketId }: { ticketId: string }) {
   const commentsQuery = useTicketCommentsQuery(ticketId);
@@ -134,6 +157,44 @@ type TicketDetailsDialogProps = {
 };
 
 export function TicketDetailsDialog({ ticket, onClose, boardSteps }: TicketDetailsDialogProps) {
+  const settleTicketMutation = useSettleTicketMutation();
+  const [isSettleOpen, setIsSettleOpen] = React.useState(false);
+  const [selectedBoardStepId, setSelectedBoardStepId] =
+    React.useState<BoardStepId>("todo");
+  const [settleComment, setSettleComment] = React.useState("");
+  const settleBoardSteps = boardSteps
+    .filter((step) =>
+      ["todo", "inprogress", "done", "failed"].includes(step.id),
+    )
+    .sort((left, right) => left.position - right.position);
+
+  React.useEffect(() => {
+    if (!ticket) {
+      setIsSettleOpen(false);
+      setSettleComment("");
+      setSelectedBoardStepId("todo");
+      return;
+    }
+    setSelectedBoardStepId(boardStepIdForTicketStatus(ticket.status));
+    setSettleComment("");
+    setIsSettleOpen(false);
+  }, [ticket?.id, ticket?.status]);
+
+  const handleSettleTicket = async () => {
+    if (!ticket) return;
+    try {
+      await settleTicketMutation.mutateAsync({
+        ticket,
+        boardStepId: selectedBoardStepId,
+        comment: settleComment,
+      });
+      setSettleComment("");
+      setIsSettleOpen(false);
+    } catch {
+      // The mutation owns user-facing error toasts.
+    }
+  };
+
   return (
     <Dialog open={!!ticket} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[95vw] sm:max-w-[800px] lg:max-w-[1000px] max-h-[85vh] p-0 flex flex-col overflow-hidden">
@@ -230,7 +291,100 @@ export function TicketDetailsDialog({ ticket, onClose, boardSteps }: TicketDetai
                               {STATUS_LABELS[ticket.status] || ticket.status}
                             </Badge>
                           </div>
+                          {ticket.subagentStatus && (
+                            <Badge variant="secondary" className="w-fit">
+                              {SUBAGENT_STATUS_LABELS[ticket.subagentStatus]}
+                            </Badge>
+                          )}
+                          {!isSettleOpen ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-fit"
+                              onClick={() => setIsSettleOpen(true)}
+                            >
+                              Settle
+                            </Button>
+                          ) : (
+                            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
+                              <div className="flex flex-col gap-2">
+                                <Label className="text-xs font-medium">
+                                  Move to board
+                                </Label>
+                                <Select
+                                  value={selectedBoardStepId}
+                                  onValueChange={(value) =>
+                                    setSelectedBoardStepId(value as BoardStepId)
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 w-full bg-background">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {settleBoardSteps.map((step) => (
+                                      <SelectItem key={step.id} value={step.id}>
+                                        {step.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label className="text-xs font-medium">
+                                  Comment
+                                </Label>
+                                <textarea
+                                  value={settleComment}
+                                  onChange={(event) =>
+                                    setSettleComment(event.target.value)
+                                  }
+                                  maxLength={10000}
+                                  rows={4}
+                                  placeholder="Optional context for future runs"
+                                  className="min-h-20 w-full resize-none rounded-lg border border-input bg-background px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                />
+                              </div>
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={settleTicketMutation.isPending}
+                                  onClick={() => {
+                                    setIsSettleOpen(false);
+                                    setSettleComment("");
+                                    setSelectedBoardStepId(
+                                      boardStepIdForTicketStatus(ticket.status),
+                                    );
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  disabled={settleTicketMutation.isPending}
+                                  onClick={() => void handleSettleTicket()}
+                                >
+                                  {settleTicketMutation.isPending && (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  )}
+                                  Submit
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
+
+                        {ticket.assignedSubagentName && (
+                          <div className="flex flex-col gap-3">
+                            <Label className="text-sm font-semibold flex items-center gap-2">
+                              <Bot className="w-4 h-4 text-muted-foreground" />
+                              Assigned Team Member
+                            </Label>
+                            <Badge variant="outline" className="w-fit">
+                              {ticket.assignedSubagentName}
+                            </Badge>
+                          </div>
+                        )}
 
                         <div className="flex flex-col gap-3">
                           <Label className="text-sm font-semibold flex items-center gap-2">
@@ -262,6 +416,28 @@ export function TicketDetailsDialog({ ticket, onClose, boardSteps }: TicketDetai
                                 {ticket.retryCount} / {ticket.maximumRetries}
                               </span>
                             </div>
+                            <div className="mt-2">
+                              <Label className="text-[10px] text-muted-foreground">Last Activity</Label>
+                              <span className="block text-sm font-medium">
+                                {formatActivityAge(ticket.activity?.lastActivityAgeMs)}
+                              </span>
+                            </div>
+                            {ticket.activity?.lastActivityByAgentName && (
+                              <div className="mt-2">
+                                <Label className="text-[10px] text-muted-foreground">Last Actor</Label>
+                                <span className="block truncate text-sm font-medium">
+                                  {ticket.activity.lastActivityByAgentName}
+                                </span>
+                              </div>
+                            )}
+                            {ticket.subagentStatusUpdatedAt && (
+                              <div className="mt-2">
+                                <Label className="text-[10px] text-muted-foreground">Subagent Updated</Label>
+                                <span className="block text-sm font-medium">
+                                  {new Date(ticket.subagentStatusUpdatedAt).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
                             {ticket.worktreePath && (
                               <div className="mt-2">
                                 <Label className="text-[10px] text-muted-foreground">Worktree</Label>
@@ -280,6 +456,45 @@ export function TicketDetailsDialog({ ticket, onClose, boardSteps }: TicketDetai
                             )}
                           </div>
                         </div>
+
+                        {ticket.activity?.recentComments?.length ? (
+                          <div className="flex flex-col gap-3">
+                            <Label className="text-sm font-semibold flex items-center gap-2">
+                              <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                              Recent Comments
+                            </Label>
+                            <div className="flex flex-col gap-2">
+                              {ticket.activity.recentComments.map((comment) => {
+                                const meta =
+                                  COMMENT_KIND_META[comment.kind] ??
+                                  COMMENT_KIND_META.note;
+                                return (
+                                  <div
+                                    key={comment.id}
+                                    className="rounded-md border bg-muted/20 p-2"
+                                  >
+                                    <div className="mb-1 flex items-center gap-1.5">
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.badge}`}
+                                      >
+                                        {meta.icon}
+                                        {meta.label}
+                                      </span>
+                                      {comment.authorName && (
+                                        <span className="truncate text-[10px] font-medium">
+                                          {comment.authorName}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                                      {comment.body}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
 
                         <div className="flex flex-col gap-3 pt-6 border-t">
                           <div className="flex flex-col gap-1">
@@ -320,7 +535,7 @@ export function TicketDetailsDialog({ ticket, onClose, boardSteps }: TicketDetai
                   <div className="px-6 py-6">
                     <div className="max-w-2xl">
                       <p className="mb-4 text-xs text-muted-foreground">
-                        Comments are added through the API. This view is read-only.
+                        Comments capture context from ticket execution and manual settlement.
                       </p>
                       <TicketCommentsPanel ticketId={ticket.id} />
                     </div>

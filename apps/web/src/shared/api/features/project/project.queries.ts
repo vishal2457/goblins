@@ -80,7 +80,7 @@ export function useUpdateProjectAgentInstructionsMutation(projectId: string | nu
       });
     },
     onSuccess: (agent) => {
-      toast.success("Subagent updated", agent.displayName);
+      toast.success("Team member updated", agent.displayName);
       if (projectId) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.projectAgents(projectId),
@@ -89,8 +89,8 @@ export function useUpdateProjectAgentInstructionsMutation(projectId: string | nu
     },
     onError: (error) => {
       toast.error(
-        "Failed to update subagent",
-        error instanceof Error ? error.message : "Failed to update subagent",
+        "Failed to update team member",
+        error instanceof Error ? error.message : "Failed to update team member",
       );
     },
   });

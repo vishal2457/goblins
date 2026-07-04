@@ -7,14 +7,30 @@ import {
 } from "../../../shared/db/schema/projects";
 import {
   ticketDependencies,
+  ticketComments,
   ticketItems,
   tickets,
   type NewTicket,
   type Ticket,
+  type TicketComment,
 } from "../../../shared/db/schema/tickets";
 
+const RECENT_TICKET_COMMENT_LIMIT = 5;
+
+export type TicketActivity = {
+  lastActivityAt: Date | null;
+  lastActivityAgeMs: number | null;
+  lastActivityByAgentName: string | null;
+  commentCount: number;
+  recentComments: TicketComment[];
+};
+
+export type TicketWithActivity = Ticket & {
+  activity: TicketActivity;
+};
+
 export type TicketList = {
-  data: Ticket[];
+  data: TicketWithActivity[];
   pagination: {
     page: number;
     limit: number;
@@ -170,12 +186,13 @@ export class TicketsRepository {
       .orderBy(desc(tickets.priority), asc(tickets.createdAt));
   }
 
-  async findByModule(moduleId: string): Promise<Ticket[]> {
-    return db
+  async findByModule(moduleId: string): Promise<TicketWithActivity[]> {
+    const data = await db
       .select()
       .from(tickets)
       .where(eq(tickets.moduleId, moduleId))
       .orderBy(desc(tickets.priority), asc(tickets.createdAt));
+    return this.withActivity(data);
   }
 
   async countIncompleteDependencies(ticketId: string): Promise<number> {
@@ -212,24 +229,45 @@ export class TicketsRepository {
     ]);
     const total = Number(totalRow[0]?.value ?? 0);
     return {
-      data,
+      data: await this.withActivity(data),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
-  async findById(id: string): Promise<Ticket | null> {
+  async findById(id: string): Promise<TicketWithActivity | null> {
     const [ticket] = await db
       .select()
       .from(tickets)
       .where(eq(tickets.id, id))
       .limit(1);
-    return ticket ?? null;
+    if (!ticket) return null;
+    const [withActivity] = await this.withActivity([ticket]);
+    return withActivity ?? null;
   }
 
   async update(id: string, data: Partial<NewTicket>): Promise<Ticket | null> {
     const [ticket] = await db
       .update(tickets)
       .set({ ...data, updatedAt: new Date() })
+      .where(eq(tickets.id, id))
+      .returning();
+    return ticket ?? null;
+  }
+
+  async touchActivity(
+    id: string,
+    data: {
+      lastActivityAt?: Date;
+      lastActivityByAgentName?: string | null;
+    },
+  ): Promise<Ticket | null> {
+    const [ticket] = await db
+      .update(tickets)
+      .set({
+        lastActivityAt: data.lastActivityAt ?? new Date(),
+        lastActivityByAgentName: data.lastActivityByAgentName ?? null,
+        updatedAt: new Date(),
+      })
       .where(eq(tickets.id, id))
       .returning();
     return ticket ?? null;
@@ -266,5 +304,51 @@ export class TicketsRepository {
       .where(eq(tickets.id, id))
       .returning();
     return ticket ?? null;
+  }
+
+  private async withActivity(data: Ticket[]): Promise<TicketWithActivity[]> {
+    if (!data.length) return [];
+    const ticketIds = data.map((ticket) => ticket.id);
+    const [commentCounts, latestComments] = await Promise.all([
+      db
+        .select({ ticketId: ticketComments.ticketId, value: count() })
+        .from(ticketComments)
+        .where(inArray(ticketComments.ticketId, ticketIds))
+        .groupBy(ticketComments.ticketId),
+      db
+        .select()
+        .from(ticketComments)
+        .where(inArray(ticketComments.ticketId, ticketIds))
+        .orderBy(desc(ticketComments.createdAt)),
+    ]);
+
+    const countByTicket = new Map(
+      commentCounts.map((row) => [row.ticketId, Number(row.value)]),
+    );
+    const commentsByTicket = new Map<string, TicketComment[]>();
+    for (const comment of latestComments) {
+      const comments = commentsByTicket.get(comment.ticketId) ?? [];
+      if (comments.length < RECENT_TICKET_COMMENT_LIMIT) {
+        comments.push(comment);
+        commentsByTicket.set(comment.ticketId, comments);
+      }
+    }
+    const now = Date.now();
+
+    return data.map((ticket) => {
+      const lastActivityAt = ticket.lastActivityAt ?? ticket.updatedAt ?? null;
+      return {
+        ...ticket,
+        activity: {
+          lastActivityAt,
+          lastActivityAgeMs: lastActivityAt
+            ? Math.max(0, now - lastActivityAt.getTime())
+            : null,
+          lastActivityByAgentName: ticket.lastActivityByAgentName,
+          commentCount: countByTicket.get(ticket.id) ?? 0,
+          recentComments: commentsByTicket.get(ticket.id) ?? [],
+        },
+      };
+    });
   }
 }

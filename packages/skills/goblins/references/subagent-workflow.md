@@ -9,7 +9,7 @@ At the start of work:
 1. Fetch the ticket details.
 2. Read the goal context if the ticket references a goal.
 3. Read existing ticket comments.
-4. Mark the ticket `in_progress`.
+4. Mark the ticket `in_progress`, set `assignedSubagentName` to your native subagent name if it is missing or incorrect, set `subagentStatus` to `analysing`, and include `activityAuthorName`.
 5. Add a `note` comment if the execution plan or assumptions are not obvious from the ticket description.
 
 Work from the ticket description and comments as the source of truth. Ask the orchestrator or user only when the ticket is ambiguous in a way that affects correctness.
@@ -23,6 +23,8 @@ Keep Goblins updated with durable context:
 - add `question` comments for decisions the orchestrator or user must answer
 - append relevant files as they become important
 - update ticket status when moving to `blocked`, `review`, `failed`, or `completed`
+- update `subagentStatus` as work moves through `analysing`, `executing`, `verifying`, and `done`
+- keep `assignedSubagentName` accurate if the work is handed off
 
 Do not rely on chat-only status updates. The ticket should explain what happened after the subagent finishes.
 
@@ -63,3 +65,12 @@ If no code changed, state that explicitly and explain the produced artifact or r
 - `failed`: attempted but not completed
 - `completed`: accepted as done
 - `cancelled`: no longer needed
+
+## Subagent Status Semantics
+
+- `analysing`: reading context, identifying approach, or preparing a plan
+- `executing`: actively editing, researching, or producing the ticket output
+- `verifying`: running checks, reviewing results, or preparing completion evidence
+- `done`: subagent work is finished; ticket should be `review` or `completed`
+
+When updating ticket status or subagent status, include `activityAuthorName` so the orchestrator can see who last changed the ticket. Ticket fetch responses include `activity.lastActivityAgeMs`, `activity.lastActivityByAgentName`, `activity.commentCount`, and `activity.recentComments`.

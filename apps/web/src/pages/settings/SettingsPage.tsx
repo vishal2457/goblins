@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  type ExecutionMode,
-  type Goal,
-  type Project,
-} from "@goblins/shared-constants";
+import { type Project } from "@goblins/shared-constants";
 import { Button } from "../../components/ui/button";
 import {
   Dialog,
@@ -27,10 +23,6 @@ import {
   useDashboardQuery,
 } from "../../shared/api/features/dashboard/dashboard.queries";
 import {
-  useResetGoalPlanningMutation,
-  useUpdateGoalMutation,
-} from "../../shared/api/features/goal/goal.queries";
-import {
   useCreateProjectMutation,
   useProjectAgentsQuery,
   useUpdateProjectAgentInstructionsMutation,
@@ -50,11 +42,10 @@ export function SettingsPage() {
   const {
     selectedProjectId,
     setSelectedProjectId,
+    setSelectedGoalId,
   } = useDashboardSelection(projects, goals);
   const createProjectMutation = useCreateProjectMutation();
   const updateProjectMutation = useUpdateProjectMutation();
-  const updateGoalMutation = useUpdateGoalMutation();
-  const resetGoalPlanningMutation = useResetGoalPlanningMutation();
   const navigate = useNavigate();
   const { tab } = useParams<{ tab?: string }>();
   const activeTab: SettingsTab =
@@ -71,50 +62,25 @@ export function SettingsPage() {
   const goToTab = (nextTab: SettingsTab) => {
     navigate(`/settings/${nextTab}`, { replace: true });
   };
-  const [dialog, setDialog] = useState<
-    null | "project" | "editProject" | "editGoal"
-  >(null);
+  const [dialog, setDialog] = useState<null | "project" | "editProject">(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [technicalInstructions, setTechnicalInstructions] = useState("");
   const [location, setLocation] = useState("");
-  const [baseBranch, setBaseBranch] = useState("main");
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>("direct");
-  const [testCommand, setTestCommand] = useState("");
-  const [lintCommand, setLintCommand] = useState("");
-  const [typeCheckCommand, setTypeCheckCommand] = useState("");
-  const [buildCommand, setBuildCommand] = useState("");
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [agentInstructions, setAgentInstructions] = useState("");
+
+  const selectProject = (projectId: string | null) => {
+    setSelectedGoalId(null);
+    setSelectedProjectId(projectId);
+  };
 
   const resetDialog = () => {
     setDialog(null);
     setEditingProjectId(null);
-    setEditingGoalId(null);
     setName("");
     setDescription("");
-    setTechnicalInstructions("");
     setLocation("");
-    setBaseBranch("main");
-    setExecutionMode("direct");
-    setTestCommand("");
-    setLintCommand("");
-    setTypeCheckCommand("");
-    setBuildCommand("");
-  };
-
-  const isGoalPlanningOpen = (goal: Goal) =>
-    goal.phases.find((phase) => phase.id === "planning")?.status !==
-    "completed";
-
-  const openEditGoal = (goal: Goal) => {
-    setEditingGoalId(goal.id);
-    setName(goal.title);
-    setDescription(goal.description || "");
-    setTechnicalInstructions(goal.technicalInstructions || "");
-    setDialog("editGoal");
   };
 
   const openEditProject = (project: Project) => {
@@ -122,25 +88,7 @@ export function SettingsPage() {
     setName(project.name);
     setLocation(project.location);
     setDescription(project.description || "");
-    setBaseBranch(project.baseBranch || "main");
-    setExecutionMode(project.executionMode || "direct");
-    setTestCommand(project.testCommand || "");
-    setLintCommand(project.lintCommand || "");
-    setTypeCheckCommand(project.typeCheckCommand || "");
-    setBuildCommand(project.buildCommand || "");
     setDialog("editProject");
-  };
-
-  const resetPlanningData = async (goal: Goal) => {
-    if (
-      !window.confirm(
-        `Clear planning data for "${goal.title}" and start planning again? This deletes generated tickets for this goal.`,
-      )
-    ) {
-      return;
-    }
-
-    await resetGoalPlanningMutation.mutateAsync(goal.id);
   };
 
   const createItem = async () => {
@@ -151,15 +99,15 @@ export function SettingsPage() {
         const project = await createProjectMutation.mutateAsync({
           name: name.trim(),
           location: location.trim(),
+          description: description.trim() || undefined,
         });
-        setSelectedProjectId(project.id);
+        selectProject(project.id);
       }
 
       if (
         dialog === "editProject" &&
         editingProjectId &&
-        location.trim() &&
-        baseBranch.trim()
+        location.trim()
       ) {
         await updateProjectMutation.mutateAsync({
           id: editingProjectId,
@@ -167,23 +115,6 @@ export function SettingsPage() {
             name: name.trim(),
             location: location.trim(),
             description: description.trim() || null,
-            baseBranch: baseBranch.trim(),
-            executionMode,
-            testCommand: testCommand.trim() || null,
-            lintCommand: lintCommand.trim() || null,
-            typeCheckCommand: typeCheckCommand.trim() || null,
-            buildCommand: buildCommand.trim() || null,
-          },
-        });
-      }
-
-      if (dialog === "editGoal" && editingGoalId) {
-        await updateGoalMutation.mutateAsync({
-          id: editingGoalId,
-          data: {
-            title: name.trim(),
-            description: description.trim(),
-            technicalInstructions: technicalInstructions.trim() || undefined,
           },
         });
       }
@@ -204,7 +135,7 @@ export function SettingsPage() {
 
   const tabs = [
     ["projects", "Projects & Goals", Folder],
-    ["subagents", "Subagents", Bot],
+    ["subagents", "Team", Bot],
   ] as const;
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedProjectGoals = selectedProject
@@ -231,7 +162,7 @@ export function SettingsPage() {
             </Label>
             <Select
               value={selectedProjectId || ""}
-              onValueChange={(value) => setSelectedProjectId(value || null)}
+              onValueChange={(value) => selectProject(value || null)}
             >
               <SelectTrigger className="w-full h-8">
                 <SelectValue placeholder="Select project">
@@ -280,9 +211,6 @@ export function SettingsPage() {
               selectedProjectGoals={selectedProjectGoals}
               onCreateProject={() => setDialog("project")}
               onEditProject={openEditProject}
-              onEditGoal={openEditGoal}
-              onResetPlanningData={(goal) => void resetPlanningData(goal)}
-              isGoalPlanningOpen={isGoalPlanningOpen}
             />
           )}
 
@@ -318,9 +246,7 @@ export function SettingsPage() {
             <DialogTitle>
               {dialog === "project"
                 ? "New Project"
-                : dialog === "editProject"
-                  ? "Edit Project"
-                  : "Edit Goal"}
+                : "Edit Project"}
             </DialogTitle>
           </DialogHeader>
           <div className="theme-scrollbar min-h-0 space-y-4 overflow-y-auto px-4 py-3">
@@ -339,90 +265,12 @@ export function SettingsPage() {
                 />
               </Field>
             )}
-            {dialog === "editProject" && (
-              <>
-                <Field label="Description">
-                  <textarea
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    className="min-h-24 w-full rounded-md border bg-muted/20 p-3 text-sm"
-                  />
-                </Field>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Base Branch">
-                    <Input
-                      value={baseBranch}
-                      onChange={(event) => setBaseBranch(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Execution Mode">
-                    <Select
-                      value={executionMode}
-                      onValueChange={(value) =>
-                        setExecutionMode(value as ExecutionMode)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="direct">Direct</SelectItem>
-                        <SelectItem value="worktree">Worktree</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Test Command">
-                    <Input
-                      value={testCommand}
-                      onChange={(event) => setTestCommand(event.target.value)}
-                      placeholder="pnpm test"
-                    />
-                  </Field>
-                  <Field label="Lint Command">
-                    <Input
-                      value={lintCommand}
-                      onChange={(event) => setLintCommand(event.target.value)}
-                      placeholder="pnpm lint"
-                    />
-                  </Field>
-                  <Field label="Typecheck Command">
-                    <Input
-                      value={typeCheckCommand}
-                      onChange={(event) =>
-                        setTypeCheckCommand(event.target.value)
-                      }
-                      placeholder="pnpm check-types"
-                    />
-                  </Field>
-                  <Field label="Build Command">
-                    <Input
-                      value={buildCommand}
-                      onChange={(event) => setBuildCommand(event.target.value)}
-                      placeholder="pnpm build"
-                    />
-                  </Field>
-                </div>
-              </>
-            )}
-            {dialog === "editGoal" && (
+            {(dialog === "project" || dialog === "editProject") && (
               <Field label="Description">
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   className="min-h-24 w-full rounded-md border bg-muted/20 p-3 text-sm"
-                />
-              </Field>
-            )}
-            {dialog === "editGoal" && (
-              <Field label="Technical Instructions">
-                <textarea
-                  value={technicalInstructions}
-                  onChange={(event) =>
-                    setTechnicalInstructions(event.target.value)
-                  }
-                  className="min-h-28 w-full rounded-md border bg-muted/20 p-3 font-mono text-xs"
                 />
               </Field>
             )}
@@ -435,14 +283,10 @@ export function SettingsPage() {
                 (dialog === "project" && !location.trim()) ||
                 (dialog === "editProject" &&
                   (!editingProjectId ||
-                    !location.trim() ||
-                    !baseBranch.trim())) ||
-                (dialog === "editGoal" && !editingGoalId)
+                    !location.trim()))
               }
             >
-              {dialog === "editGoal" || dialog === "editProject"
-                ? "Save changes"
-                : "Create"}
+              {dialog === "editProject" ? "Save changes" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

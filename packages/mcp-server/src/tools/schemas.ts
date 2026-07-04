@@ -67,3 +67,10 @@ export const ticketPrioritySchema = z.enum([
   "high",
   "critical",
 ]);
+
+export const ticketSubagentStatusSchema = z.enum([
+  "analysing",
+  "executing",
+  "verifying",
+  "done",
+]);

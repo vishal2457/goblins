@@ -14,17 +14,9 @@
 {
   "name": "Example",
   "location": "/absolute/path/to/repo",
-  "description": "Optional description",
-  "baseBranch": "main",
-  "executionMode": "direct",
-  "testCommand": "pnpm test",
-  "lintCommand": "pnpm lint",
-  "typeCheckCommand": "pnpm check-types",
-  "buildCommand": "pnpm build"
+  "description": "Optional description"
 }
 ```
-
-`executionMode` is `direct` or `worktree`.
 
 ### Get project
 
@@ -64,6 +56,8 @@ Use any subset of create-project fields.
 ## Discovered Subagents
 
 Subagents are discovered from files. They are not stored in the database.
+
+For Goblins orchestration, prefer subagents that are already available from project-local or global user configuration in the current environment. Use project-agent discovery only when that local/global set is empty.
 
 ### Discover project subagents
 

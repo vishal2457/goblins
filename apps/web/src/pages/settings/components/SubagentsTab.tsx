@@ -1,5 +1,13 @@
 import type { DiscoveredAgent, Project } from "@goblins/shared-constants";
-import { ChevronDown, Edit3, Loader2, RefreshCw, Save } from "lucide-react";
+import {
+  Brain,
+  ChevronDown,
+  Cpu,
+  Edit3,
+  Loader2,
+  RefreshCw,
+  Save,
+} from "lucide-react";
 import { useState } from "react";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
@@ -40,8 +48,8 @@ export function SubagentsTab({
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Heading
-          title="Subagents"
-          description="Detected file-based subagents for the selected project and user configuration."
+          title="Team"
+          description="Detected file-based team members for the selected project and user configuration."
         />
         <Button
           variant="outline"
@@ -58,11 +66,11 @@ export function SubagentsTab({
       </div>
 
       {!selectedProject ? (
-        <Empty text="Select or create a project to discover subagents." />
+        <Empty text="Select or create a project to discover team members." />
       ) : discoveredAgentsLoading && !discoveredAgents ? (
         <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-14 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Scanning subagent files.
+          Scanning team configuration.
         </div>
       ) : discoveredAgents && discoveredAgents.agents.length > 0 ? (
         <div className="overflow-hidden rounded-lg border bg-card">
@@ -95,7 +103,7 @@ export function SubagentsTab({
           ))}
         </div>
       ) : (
-        <Empty text="No subagents were detected for this project." />
+        <Empty text="No team members were detected for this project." />
       )}
     </section>
   );
@@ -142,6 +150,8 @@ function SubagentRow({
   onSave: () => void | Promise<void>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const modelLabel = agent.model?.trim() || "Not specified";
+  const reasoningLabel = getAgentReasoning(agent);
 
   return (
     <div className="border-b last:border-b-0">
@@ -153,44 +163,52 @@ function SubagentRow({
         <ChevronDown
           className={`mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+          <div className="min-w-0">
             <div className="font-semibold leading-5">{agent.displayName}</div>
+            {agent.description && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {agent.description}
+              </p>
+            )}
+          </div>
+          <BadgeGroup>
             {agent.shadowedBy && (
-              <CenteredBadge variant="outline">Shadowed</CenteredBadge>
+              <GroupedBadge variant="outline">Shadowed</GroupedBadge>
             )}
             {!agent.validation.valid && (
-              <CenteredBadge variant="destructive">Invalid</CenteredBadge>
+              <GroupedBadge variant="destructive">Invalid</GroupedBadge>
             )}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <CenteredBadge variant="secondary" className="capitalize">
-              {agent.provider}
-            </CenteredBadge>
-            <CenteredBadge variant="outline" className="capitalize">
+            <GroupedBadge variant="outline" className="capitalize">
               {agent.scope}
-            </CenteredBadge>
-            <CenteredBadge variant="outline" className="capitalize">
-              {agent.mode}
-            </CenteredBadge>
-            <CenteredBadge variant="outline" className="uppercase">
-              {agent.sourceKind}
-            </CenteredBadge>
+            </GroupedBadge>
             {agent.model && (
-              <CenteredBadge variant="outline">{agent.model}</CenteredBadge>
+              <GroupedBadge variant="outline">
+                <Cpu className="mr-1 h-3 w-3" />
+                Model: {modelLabel}
+              </GroupedBadge>
             )}
-          </div>
-          {agent.description && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {agent.description}
-            </p>
-          )}
+            {reasoningLabel && (
+              <GroupedBadge variant="outline">
+                <Brain className="mr-1 h-3 w-3" />
+                Reasoning: {reasoningLabel}
+              </GroupedBadge>
+            )}
+          </BadgeGroup>
         </div>
       </button>
 
       {isOpen && (
         <div className="border-t bg-muted/10 px-4 py-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <ModelDetail label="Model" value={modelLabel} />
+              <ModelDetail
+                label="Reasoning"
+                value={reasoningLabel || "Not specified"}
+              />
+              <ModelDetail label="Provider" value={agent.provider} />
+            </div>
             {!isEditing && (
               <Button
                 size="sm"
@@ -237,6 +255,46 @@ function SubagentRow({
   );
 }
 
-function CenteredBadge(props: React.ComponentProps<typeof Badge>) {
+function BadgeGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex shrink-0 flex-wrap justify-end gap-y-1 overflow-hidden rounded-4xl [&>*:first-child]:rounded-l-4xl [&>*:last-child]:rounded-r-4xl [&>*:not(:first-child)]:-ml-px [&>*:not(:first-child)]:rounded-l-none [&>*:not(:last-child)]:rounded-r-none">
+      {children}
+    </div>
+  );
+}
+
+function GroupedBadge(props: React.ComponentProps<typeof Badge>) {
   return <Badge {...props} />;
+}
+
+function getAgentReasoning(agent: DiscoveredAgent): string | undefined {
+  return firstStringValue(
+    agent.metadata.reasoning,
+    agent.metadata.reasoningEffort,
+    agent.metadata.reasoning_effort,
+    agent.metadata.reasoningBudget,
+    agent.metadata.reasoning_budget,
+  );
+}
+
+function firstStringValue(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function ModelDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-40">
+      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 break-words font-mono text-xs text-foreground">
+        {value}
+      </div>
+    </div>
+  );
 }

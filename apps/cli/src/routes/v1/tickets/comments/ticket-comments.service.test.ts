@@ -25,6 +25,11 @@ const ticket = {
   priority: "medium",
   retryCount: 0,
   maximumRetries: 3,
+  assignedSubagentName: null,
+  subagentStatus: null,
+  subagentStatusUpdatedAt: null,
+  lastActivityAt: null,
+  lastActivityByAgentName: null,
   worktreePath: null,
   branchName: null,
   startedAt: null,
@@ -50,13 +55,16 @@ describe("TicketCommentsService", () => {
     findLatestByTicket: vi.fn(),
     countByTicket: vi.fn(),
   };
-  const ticketsRepository = { findById: vi.fn() };
+  const ticketsRepository = { findById: vi.fn(), touchActivity: vi.fn() };
   const service = new TicketCommentsService(
     commentsRepository as unknown as TicketCommentsRepository,
     ticketsRepository as unknown as TicketsRepository,
   );
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ticketsRepository.touchActivity.mockResolvedValue(ticket);
+  });
 
   it("creates a comment when the ticket exists", async () => {
     ticketsRepository.findById.mockResolvedValue(ticket);
@@ -79,6 +87,10 @@ describe("TicketCommentsService", () => {
       authorName: "planner",
       kind: "question",
     });
+    expect(ticketsRepository.touchActivity).toHaveBeenCalledWith(ticketId, {
+      lastActivityAt: baseComment.createdAt,
+      lastActivityByAgentName: "planner",
+    });
   });
 
   it("trims whitespace and defaults missing fields", async () => {
@@ -94,6 +106,10 @@ describe("TicketCommentsService", () => {
       body: "hello",
       authorName: null,
       kind: "note",
+    });
+    expect(ticketsRepository.touchActivity).toHaveBeenCalledWith(ticketId, {
+      lastActivityAt: baseComment.createdAt,
+      lastActivityByAgentName: null,
     });
     expect(result.body).toBe("hello");
   });

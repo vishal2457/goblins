@@ -6,14 +6,6 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { useDashboardSelection } from "../../hooks/useDashboardSelection";
 import {
-  useCancelGoalMutation,
-  useCompleteRetrospectiveMutation,
-  usePauseGoalMutation,
-  useResumeGoalMutation,
-  useStartGoalWorkflowMutation,
-  useStartRetrospectiveMutation,
-} from "../../shared/api/features/goal/goal.queries";
-import {
   useDashboardQuery,
   useGoalAuditLogsQuery,
 } from "../../shared/api/features/dashboard/dashboard.queries";
@@ -21,7 +13,6 @@ import { DashboardToolbar } from "./components/DashboardToolbar";
 import { GoalDetailsSheet } from "./components/GoalDetailsSheet";
 import { GoalErrorBanner } from "./components/GoalErrorBanner";
 import { KanbanColumn } from "./components/KanbanColumn";
-import { RetrospectiveDialog } from "./components/RetrospectiveDialog";
 import {
   LayoutGrid,
   FolderOpen,
@@ -43,61 +34,15 @@ export function DashboardPage() {
     setSelectedGoalId,
   } = useDashboardSelection(projects, goals);
   const auditLogsQuery = useGoalAuditLogsQuery(selectedGoalId);
-  const startGoalWorkflowMutation = useStartGoalWorkflowMutation();
-  const pauseGoalMutation = usePauseGoalMutation();
-  const resumeGoalMutation = useResumeGoalMutation();
-  const cancelGoalMutation = useCancelGoalMutation();
-  const startRetrospectiveMutation = useStartRetrospectiveMutation();
-  const completeRetrospectiveMutation = useCompleteRetrospectiveMutation();
 
   const [viewingTicketDetails, setViewingTicketDetails] =
     useState<Ticket | null>(null);
   const [isGoalSheetOpen, setIsGoalSheetOpen] = useState(false);
-  const [isRetrospectiveDialogOpen, setIsRetrospectiveDialogOpen] =
-    useState(false);
-  const [retrospectiveUserPoints, setRetrospectiveUserPoints] = useState("");
 
   const handleProjectSelect = (projectId: string) => {
     setSelectedProjectId(projectId);
     const projectGoals = goals.filter((goal) => goal.projectId === projectId);
     setSelectedGoalId(projectGoals[0]?.id || null);
-  };
-
-  const handleExecuteGoal = async () => {
-    const selectedGoal = goals.find((goal) => goal.id === selectedGoalId);
-    if (!selectedGoal) return;
-    await startGoalWorkflowMutation.mutateAsync(selectedGoal);
-  };
-
-  const handlePauseGoal = async () => {
-    if (!selectedGoalId) return;
-    await pauseGoalMutation.mutateAsync(selectedGoalId);
-  };
-
-  const handleResumeGoal = async () => {
-    if (!selectedGoalId) return;
-    await resumeGoalMutation.mutateAsync(selectedGoalId);
-  };
-
-  const handleCancelGoal = async () => {
-    if (!selectedGoalId) return;
-    await cancelGoalMutation.mutateAsync(selectedGoalId);
-  };
-
-  const handleStartRetrospective = async () => {
-    if (!selectedGoalId) return;
-    const goal = await startRetrospectiveMutation.mutateAsync({
-      goalId: selectedGoalId,
-      userPoints: retrospectiveUserPoints,
-    });
-    if (!goal) return;
-    setRetrospectiveUserPoints("");
-    setIsRetrospectiveDialogOpen(false);
-  };
-
-  const handleCompleteRetrospective = async () => {
-    if (!selectedGoalId) return;
-    await completeRetrospectiveMutation.mutateAsync(selectedGoalId);
   };
 
   const currentProjectGoals = goals.filter(
@@ -161,32 +106,6 @@ export function DashboardPage() {
     );
   }
 
-  const isGoalRunning =
-    selectedGoal?.status === "running" || selectedGoal?.status === "planning";
-  const isGoalPaused = selectedGoal?.status === "paused";
-  const isGoalCancelled = selectedGoal?.status === "cancelled";
-  const isGoalRetrospective = selectedGoal?.status === "retrospective";
-  const executionPhase = selectedGoal?.phases.find(
-    (phase) => phase.id === "execution",
-  );
-  const canStartRetrospective =
-    selectedGoal?.status === "completed" &&
-    executionPhase?.status === "completed";
-  const canRetryPlanning =
-    (selectedGoal?.status === "failed" && selectedGoal.ticketIds.length === 0) ||
-    selectedGoal?.status === "planning";
-  const canExecute =
-    selectedGoal &&
-    (selectedGoal.status === "draft" ||
-      selectedGoal.status === "ready" ||
-      canRetryPlanning);
-  const executeGoalLabel = canRetryPlanning
-    ? selectedGoal?.status === "planning"
-      ? "Restart planning"
-      : "Retry planning"
-    : selectedGoal?.status === "ready"
-      ? "Start execution"
-      : "Start planning";
   const visibleGoalError =
     selectedGoal?.lastError ??
     (selectedGoal?.status === "failed"
@@ -197,6 +116,10 @@ export function DashboardPage() {
           occurredAt: selectedGoal.updatedAt,
         }
       : null);
+  const currentViewingTicketDetails = viewingTicketDetails
+    ? displayTickets.find((ticket) => ticket.id === viewingTicketDetails.id) ??
+      viewingTicketDetails
+    : null;
 
   return (
     <div className="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden bg-background text-foreground">
@@ -206,22 +129,9 @@ export function DashboardPage() {
         selectedProjectId={selectedProjectId || ""}
         selectedGoalId={selectedGoalId || ""}
         selectedGoal={selectedGoal}
-        canExecute={Boolean(canExecute)}
-        executeGoalLabel={executeGoalLabel}
-        isGoalRunning={isGoalRunning}
-        isGoalPaused={isGoalPaused}
-        isGoalCancelled={isGoalCancelled}
-        canStartRetrospective={canStartRetrospective}
-        isGoalRetrospective={isGoalRetrospective}
         onProjectSelect={handleProjectSelect}
         onGoalSelect={(goalId) => setSelectedGoalId(goalId)}
         onOpenGoalDetails={() => setIsGoalSheetOpen(true)}
-        onExecuteGoal={() => void handleExecuteGoal()}
-        onPauseGoal={() => void handlePauseGoal()}
-        onResumeGoal={() => void handleResumeGoal()}
-        onCancelGoal={() => void handleCancelGoal()}
-        onOpenRetrospective={() => setIsRetrospectiveDialogOpen(true)}
-        onCompleteRetrospective={() => void handleCompleteRetrospective()}
       />
 
       <GoalErrorBanner error={visibleGoalError} />
@@ -258,26 +168,18 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <RetrospectiveDialog
-        open={isRetrospectiveDialogOpen}
-        userPoints={retrospectiveUserPoints}
-        isStarting={startRetrospectiveMutation.isPending}
-        onOpenChange={setIsRetrospectiveDialogOpen}
-        onUserPointsChange={setRetrospectiveUserPoints}
-        onStart={() => void handleStartRetrospective()}
-      />
-
       <GoalDetailsSheet
         open={isGoalSheetOpen}
         onClose={() => setIsGoalSheetOpen(false)}
         selectedProject={selectedProject}
         selectedGoal={selectedGoal}
+        tickets={displayTickets}
         auditLogs={auditLogsQuery.data || []}
         auditLogsLoading={auditLogsQuery.isLoading || auditLogsQuery.isFetching}
       />
 
       <TicketDetailsDialog
-        ticket={viewingTicketDetails}
+        ticket={currentViewingTicketDetails}
         onClose={() => setViewingTicketDetails(null)}
         boardSteps={boardSteps}
       />

@@ -9,6 +9,7 @@ import type {
   ProjectModule,
   Ticket,
   TicketComment,
+  TicketCommentKind,
 } from "@goblins/shared-constants";
 import { apiClient } from "./client";
 
@@ -55,18 +56,31 @@ type DbTicket = Omit<
 > & { currentStepId: string | null };
 
 export type ProjectUpdateInput = Partial<
-  Pick<Project, "name" | "location" | "baseBranch" | "executionMode">
-> & {
-  description?: string | null;
-  testCommand?: string | null;
-  lintCommand?: string | null;
-  typeCheckCommand?: string | null;
-  buildCommand?: string | null;
-};
+  Pick<Project, "name" | "location">
+> & { description?: string | null };
 
 export type GoalUpdateInput = Partial<
   Pick<Goal, "title" | "description" | "technicalInstructions" | "maxRetries">
 >;
+
+export type TicketUpdateInput = Partial<
+  Pick<
+    Ticket,
+    | "status"
+    | "subagentStatus"
+    | "assignedSubagentName"
+  >
+> & {
+  startedAt?: string | null;
+  completedAt?: string | null;
+  activityAuthorName?: string | null;
+};
+
+export type TicketCommentCreateInput = {
+  body: string;
+  authorName?: string | null;
+  kind?: TicketCommentKind;
+};
 
 export type DashboardData = {
   projects: Project[];
@@ -182,20 +196,8 @@ export async function createProject(data: {
   location: string;
   description?: string;
   techPreferences?: string[];
-  baseBranch?: string;
-  executionMode?: "direct" | "worktree";
-  testCommand?: string;
-  lintCommand?: string;
-  typeCheckCommand?: string;
-  buildCommand?: string;
 }): Promise<Project> {
-  return mapProject(
-    await postResult<DbProject>(API_PATHS.projects, {
-      ...data,
-      baseBranch: data.baseBranch || "main",
-      executionMode: data.executionMode || "direct",
-    }),
-  );
+  return mapProject(await postResult<DbProject>(API_PATHS.projects, data));
 }
 
 export async function updateProject(
@@ -369,6 +371,13 @@ export async function listModuleTickets(moduleId: string): Promise<Ticket[]> {
   return tickets.map((ticket) => mapTicket(ticket));
 }
 
+export async function updateTicket(
+  id: string,
+  data: TicketUpdateInput,
+): Promise<Ticket> {
+  return mapTicket(await patchResult<DbTicket>(API_PATHS.ticketById(id), data));
+}
+
 export async function deleteTicket(id: string): Promise<void> {
   await deleteResult(API_PATHS.ticketById(id));
 }
@@ -383,6 +392,13 @@ export async function listTicketComments(
   );
 
   return result.data;
+}
+
+export async function createTicketComment(
+  ticketId: string,
+  data: TicketCommentCreateInput,
+): Promise<TicketComment> {
+  return postResult<TicketComment>(API_PATHS.ticketComments(ticketId), data);
 }
 
 export async function listGoalAuditLogs(

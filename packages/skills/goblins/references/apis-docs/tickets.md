@@ -16,6 +16,12 @@ Important ticket fields:
 - `priority`
 - `retryCount`
 - `maximumRetries`
+- `assignedSubagentName`
+- `subagentStatus`
+- `subagentStatusUpdatedAt`
+- `lastActivityAt`
+- `lastActivityByAgentName`
+- `activity`
 - `worktreePath`
 - `branchName`
 - `startedAt`
@@ -49,6 +55,15 @@ Ticket priorities:
 - `high`
 - `critical`
 
+Subagent statuses:
+
+- `analysing`
+- `executing`
+- `verifying`
+- `done`
+
+Ticket responses include an `activity` object with `lastActivityAt`, `lastActivityAgeMs`, `lastActivityByAgentName`, `commentCount`, and `recentComments`.
+
 ## Ticket Routes
 
 ### List tickets
@@ -69,6 +84,9 @@ Ticket priorities:
   "type": "implementation",
   "status": "backlog",
   "priority": "medium",
+  "assignedSubagentName": "codex-implementation-agent",
+  "subagentStatus": "analysing",
+  "activityAuthorName": "codex-implementation-agent",
   "maximumRetries": 3
 }
 ```
@@ -82,6 +100,8 @@ Ticket priorities:
 `PATCH /api/v1/tickets/{id}`
 
 Use any subset of create-ticket fields.
+
+When a logical agent or user is making the update, include `activityAuthorName` so ticket responses show who last changed the work state.
 
 ### Delete ticket
 
@@ -108,9 +128,9 @@ Use any subset of create-ticket fields.
 ```json
 {
   "status": "completed",
-  "stepId": "uuid",
-  "output": "What changed and evidence",
-  "error": null
+  "summary": "What changed",
+  "evidence": ["Verification performed"],
+  "activityAuthorName": "codex-implementation-agent"
 }
 ```
 

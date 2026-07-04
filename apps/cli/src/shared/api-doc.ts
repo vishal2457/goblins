@@ -3,6 +3,11 @@ type Schema = Record<string, unknown>;
 const uuid = { type: "string", format: "uuid" };
 const dateTime = { type: "string", format: "date-time", nullable: true };
 const nullableString = { type: "string", nullable: true };
+const ticketSubagentStatus = {
+  type: "string",
+  enum: ["analysing", "executing", "verifying", "done"],
+  nullable: true,
+};
 const timestamps = {
   createdAt: { type: "string", format: "date-time" },
   updatedAt: { type: "string", format: "date-time" },
@@ -32,16 +37,6 @@ const projectProperties = {
   name: { type: "string", minLength: 1, maxLength: 255 },
   location: { type: "string", minLength: 1 },
   description: nullableString,
-  baseBranch: { type: "string", minLength: 1, default: "main" },
-  executionMode: {
-    type: "string",
-    enum: ["direct", "worktree"],
-    default: "direct",
-  },
-  testCommand: nullableString,
-  lintCommand: nullableString,
-  typeCheckCommand: nullableString,
-  buildCommand: nullableString,
 };
 const goalStatus = [
   "draft",
@@ -81,6 +76,7 @@ const stepProperties = {
 };
 const ticketProperties = {
   goalId: uuid,
+  moduleId: uuid,
   currentStepId: { ...uuid, nullable: true },
   title: { type: "string", minLength: 1, maxLength: 255 },
   shortDescription: { type: "string", maxLength: 1000, default: "" },
@@ -119,10 +115,19 @@ const ticketProperties = {
   },
   retryCount: { type: "integer", minimum: 0, default: 0 },
   maximumRetries: { type: "integer", minimum: 0, default: 3 },
+  assignedSubagentName: { ...nullableString, maxLength: 255 },
+  subagentStatus: ticketSubagentStatus,
+  subagentStatusUpdatedAt: dateTime,
+  lastActivityAt: dateTime,
+  lastActivityByAgentName: { ...nullableString, maxLength: 255 },
   worktreePath: nullableString,
   branchName: nullableString,
   startedAt: dateTime,
   completedAt: dateTime,
+};
+const ticketMutationProperties = {
+  ...ticketProperties,
+  activityAuthorName: { ...nullableString, maxLength: 255 },
 };
 const ticketCommentProperties = {
   ticketId: uuid,
@@ -161,8 +166,6 @@ export const apiComponents = {
     Project: entitySchema(projectProperties, [
       "name",
       "location",
-      "baseBranch",
-      "executionMode",
     ]),
     CreateProject: requestSchema(projectProperties, ["name", "location"]),
     UpdateProject: requestSchema(projectProperties, [], 1),
@@ -260,6 +263,7 @@ export const apiComponents = {
     UpdateStep: requestSchema(stepProperties, [], 1),
     Ticket: entitySchema(ticketProperties, [
       "goalId",
+      "moduleId",
       "title",
       "description",
       "type",
@@ -267,9 +271,29 @@ export const apiComponents = {
       "priority",
       "retryCount",
       "maximumRetries",
+      "assignedSubagentName",
+    ], {
+      activity: {
+        type: "object",
+        required: ["commentCount", "recentComments"],
+        properties: {
+          lastActivityAt: dateTime,
+          lastActivityAgeMs: { type: "integer", nullable: true },
+          lastActivityByAgentName: { ...nullableString, maxLength: 255 },
+          commentCount: { type: "integer", minimum: 0 },
+          recentComments: {
+            type: "array",
+            items: { $ref: "#/components/schemas/TicketComment" },
+          },
+        },
+      },
+    }),
+    CreateTicket: requestSchema(ticketMutationProperties, [
+      "goalId",
+      "moduleId",
+      "title",
     ]),
-    CreateTicket: requestSchema(ticketProperties, ["goalId", "title"]),
-    UpdateTicket: requestSchema(ticketProperties, [], 1),
+    UpdateTicket: requestSchema(ticketMutationProperties, [], 1),
     TicketComment: entitySchema(ticketCommentProperties, [
       "ticketId",
       "body",
@@ -285,10 +309,10 @@ export const apiComponents = {
     TicketReport: {
       type: "object",
       properties: {
-        status: ticketProperties.status,
-        stepId: uuid,
-        output: { type: "string" },
-        error: { type: "string" },
+        status: { type: "string", enum: ["completed", "failed", "blocked"] },
+        summary: { type: "string" },
+        evidence: { type: "array", items: { type: "string" } },
+        activityAuthorName: { ...nullableString, maxLength: 255 },
       },
     },
     GoalTicketsSnapshot: {
@@ -692,11 +716,15 @@ function arrayOf(schema: string) {
   return { type: "array", items: ref(schema) };
 }
 
-function entitySchema(properties: Schema, required: string[]) {
+function entitySchema(
+  properties: Schema,
+  required: string[],
+  extraProperties: Schema = {},
+) {
   return {
     type: "object",
     required: ["id", ...required, "createdAt", "updatedAt"],
-    properties: { id: uuid, ...properties, ...timestamps },
+    properties: { id: uuid, ...properties, ...extraProperties, ...timestamps },
   };
 }
 

@@ -221,42 +221,6 @@ async function embeddedColumnExists(
   );
 }
 
-async function embeddedEnumExists(
-  client: PGlite,
-  enumName: string,
-): Promise<boolean> {
-  return embeddedObjectExists(
-    client,
-    `SELECT EXISTS (
-      SELECT 1
-      FROM pg_type type
-      JOIN pg_namespace namespace ON namespace.oid = type.typnamespace
-      WHERE namespace.nspname = 'public' AND type.typname = $1
-    ) AS exists`,
-    [enumName],
-  );
-}
-
-async function embeddedEnumValueExists(
-  client: PGlite,
-  enumName: string,
-  enumValue: string,
-): Promise<boolean> {
-  return embeddedObjectExists(
-    client,
-    `SELECT EXISTS (
-      SELECT 1
-      FROM pg_enum enum_value
-      JOIN pg_type type ON type.oid = enum_value.enumtypid
-      JOIN pg_namespace namespace ON namespace.oid = type.typnamespace
-      WHERE namespace.nspname = 'public'
-        AND type.typname = $1
-        AND enum_value.enumlabel = $2
-    ) AS exists`,
-    [enumName, enumValue],
-  );
-}
-
 async function embeddedMigrationAppearsApplied(
   client: PGlite,
   migrationName: string,
@@ -264,7 +228,6 @@ async function embeddedMigrationAppearsApplied(
   switch (migrationName) {
     case "0000_goblins_baseline.sql":
       return (
-        (await embeddedEnumExists(client, "execution_mode")) &&
         (await embeddedRelationExists(client, "projects")) &&
         (await embeddedRelationExists(client, "tickets"))
       );

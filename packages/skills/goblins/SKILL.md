@@ -21,10 +21,10 @@ Read [orchestration.md](references/orchestration.md), then:
 
 1. Clarify the goal with the user until scope, acceptance criteria, constraints, and unknowns are clear.
 2. Identify or create the Goblins project for the current repository.
-3. Discover project modules and available native subagents.
+3. Discover project modules and available native subagents. First use subagents already available in the current project or global user configuration. If none are available, fall back to Goblins project-agent discovery.
 4. Create a Goblins goal in `planning` or `draft`.
 5. Break the goal into tickets that are independently executable and have clear expected outputs.
-6. Assign each ticket to an appropriate module and native subagent, using ticket descriptions and comments to carry context.
+6. Assign each ticket to an appropriate module and native subagent. Set `assignedSubagentName`, `subagentStatus`, and `activityAuthorName` when creating or updating active tickets so the UI and orchestrator show who owns it and what phase it is in.
 7. Mark planning complete only when there are no open planning questions.
 
 ## Phase 2: Execute
@@ -33,7 +33,7 @@ Read [subagent-workflow.md](references/subagent-workflow.md), then:
 
 1. Start goal execution.
 2. Dispatch tickets to native subagents using the harness available in the current environment.
-3. Monitor ticket status, comments, blockers, and the goal ticket snapshot.
+3. Monitor ticket status, subagent status, activity metadata, recent comments, blockers, and the goal ticket snapshot. When checking on a subagent, always fetch the ticket itself and inspect `status`, `subagentStatus`, and `activity`; do not rely only on comments.
 4. Resolve dependencies and blockers by updating tickets or asking the user only when required.
 5. Verify completed work against the original goal and ticket acceptance criteria.
 6. Complete the goal only after all required tickets are completed or explicitly cancelled with rationale.

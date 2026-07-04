@@ -13,12 +13,6 @@ export const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(255),
   location: z.string().trim().min(1),
   description: z.string().trim().nullable().optional(),
-  baseBranch: z.string().trim().min(1).optional(),
-  executionMode: z.enum(["direct", "worktree"]).optional(),
-  testCommand: z.string().trim().nullable().optional(),
-  lintCommand: z.string().trim().nullable().optional(),
-  typeCheckCommand: z.string().trim().nullable().optional(),
-  buildCommand: z.string().trim().nullable().optional(),
 });
 
 export const updateProjectSchema = createProjectSchema

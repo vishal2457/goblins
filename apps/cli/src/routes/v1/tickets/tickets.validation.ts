@@ -42,6 +42,21 @@ export const createTicketSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   retryCount: z.number().int().min(0).optional(),
   maximumRetries: z.number().int().min(0).optional(),
+  assignedSubagentName: z.string().trim().min(1).max(255).nullable().optional(),
+  subagentStatus: z
+    .enum(["analysing", "executing", "verifying", "done"])
+    .nullable()
+    .optional(),
+  subagentStatusUpdatedAt: z.string().datetime().nullable().optional(),
+  lastActivityAt: z.string().datetime().nullable().optional(),
+  lastActivityByAgentName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .nullable()
+    .optional(),
+  activityAuthorName: z.string().trim().min(1).max(255).nullable().optional(),
   worktreePath: z.string().trim().nullable().optional(),
   branchName: z.string().trim().nullable().optional(),
   startedAt: z.string().datetime().nullable().optional(),
@@ -74,6 +89,7 @@ export const reportTicketSchema = z.object({
   status: z.enum(["completed", "failed", "blocked"]),
   summary: z.string().trim().optional(),
   evidence: z.array(z.string().trim().min(1)).optional(),
+  activityAuthorName: z.string().trim().min(1).max(255).nullable().optional(),
 });
 
 export const appendTicketFileSchema = z.object({

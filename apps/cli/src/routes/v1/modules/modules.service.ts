@@ -2,10 +2,12 @@ import type {
   NewProjectModule,
   ProjectModule,
 } from "../../../shared/db/schema/projects";
-import type { Ticket } from "../../../shared/db/schema/tickets";
 import { NotFoundError } from "../../../shared/utils/http-errors.util";
 import { ProjectsRepository } from "../projects/projects.repo";
-import { TicketsRepository } from "../tickets/tickets.repo";
+import {
+  TicketsRepository,
+  type TicketWithActivity,
+} from "../tickets/tickets.repo";
 import { ModulesRepository } from "./modules.repo";
 
 export type CreateModuleRequest = Pick<
@@ -37,7 +39,7 @@ export class ModulesService {
     return this.repository.findByProject(projectId);
   }
 
-  async findTickets(moduleId: string): Promise<Ticket[]> {
+  async findTickets(moduleId: string): Promise<TicketWithActivity[]> {
     const module = await this.repository.findById(moduleId);
     if (!module)
       throw new NotFoundError(`Module with ID ${moduleId} not found`);

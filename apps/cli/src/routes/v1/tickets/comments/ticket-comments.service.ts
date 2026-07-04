@@ -27,12 +27,17 @@ export class TicketCommentsService {
       throw new NotFoundError(`Ticket with ID ${ticketId} not found`);
     }
     const authorName = data.authorName?.trim();
-    return this.commentsRepository.create({
+    const comment = await this.commentsRepository.create({
       ticketId,
       body: data.body.trim(),
       authorName: authorName ? authorName : null,
       kind: data.kind ?? "note",
     });
+    await this.ticketsRepository.touchActivity(ticketId, {
+      lastActivityAt: comment.createdAt,
+      lastActivityByAgentName: comment.authorName,
+    });
+    return comment;
   }
 
   async findById(ticketId: string, id: string): Promise<TicketComment> {

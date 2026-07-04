@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type React from "react";
 import {
   AlertCircle,
+  Bot,
   CheckCircle2,
   CircleDot,
   Clock3,
@@ -14,6 +15,7 @@ import {
   PRIORITY_COLORS,
   STATUS_COLORS,
   STATUS_LABELS,
+  SUBAGENT_STATUS_LABELS,
   boardStepIdForTicketStatus,
   type BoardStep,
   type BoardStepId,
@@ -130,6 +132,12 @@ function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }
             {ticket.type}
           </Badge>
         )}
+        {ticket.assignedSubagentName && (
+          <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+            <Bot className="h-3 w-3 shrink-0" />
+            <span className="truncate">{ticket.assignedSubagentName}</span>
+          </span>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge
             variant="outline"
@@ -140,6 +148,11 @@ function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }
             />
             {STATUS_LABELS[ticket.status] || ticket.status}
           </Badge>
+          {ticket.subagentStatus && (
+            <Badge variant="secondary" className="w-fit text-[10px]">
+              {SUBAGENT_STATUS_LABELS[ticket.subagentStatus]}
+            </Badge>
+          )}
         </div>
 
         {ticket.relevantFiles.length > 0 && (

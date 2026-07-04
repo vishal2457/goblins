@@ -54,6 +54,11 @@ const ticket = {
   priority: "medium",
   retryCount: 0,
   maximumRetries: 3,
+  assignedSubagentName: null,
+  subagentStatus: null,
+  subagentStatusUpdatedAt: null,
+  lastActivityAt: null,
+  lastActivityByAgentName: null,
   worktreePath: null,
   branchName: null,
   startedAt: null,
@@ -71,6 +76,9 @@ describe("TicketsService module assignment", () => {
     findModule: vi.fn(),
     findById: vi.fn(),
     update: vi.fn(),
+    releaseReadyDependents: vi.fn(),
+    goalHasOpenTickets: vi.fn(),
+    updateGoal: vi.fn(),
   };
   const goalsRepository = { findById: vi.fn() };
   const service = new TicketsService(
@@ -82,6 +90,8 @@ describe("TicketsService module assignment", () => {
     vi.clearAllMocks();
     repository.createItems.mockResolvedValue(undefined);
     repository.setDependencies.mockResolvedValue(undefined);
+    repository.releaseReadyDependents.mockResolvedValue(0);
+    repository.goalHasOpenTickets.mockResolvedValue(true);
   });
 
   it("creates a ticket when its module belongs to the goal project", async () => {
@@ -89,6 +99,9 @@ describe("TicketsService module assignment", () => {
     repository.findModule.mockResolvedValue(module);
     repository.create.mockImplementation((data) =>
       Promise.resolve({ ...ticket, ...data }),
+    );
+    repository.findById.mockImplementation((id) =>
+      Promise.resolve({ ...ticket, id }),
     );
 
     const result = await service.create({
@@ -155,5 +168,75 @@ describe("TicketsService module assignment", () => {
 
     expect(result.moduleId).toBe(moduleId);
     expect(repository.update).toHaveBeenCalledWith(ticket.id, { moduleId });
+  });
+
+  it("tracks activity author and subagent status timestamps on update", async () => {
+    const updatedTicket = {
+      ...ticket,
+      status: "in_progress" as const,
+      subagentStatus: "analysing" as const,
+      lastActivityByAgentName: "agent-1",
+    };
+    repository.findById
+      .mockResolvedValueOnce(ticket)
+      .mockResolvedValueOnce(updatedTicket);
+    repository.update.mockResolvedValue(updatedTicket);
+
+    const result = await service.update(ticket.id, {
+      status: "in_progress",
+      subagentStatus: "analysing",
+      activityAuthorName: "agent-1",
+    });
+
+    expect(result.subagentStatus).toBe("analysing");
+    expect(repository.update).toHaveBeenCalledWith(
+      ticket.id,
+      expect.objectContaining({
+        status: "in_progress",
+        subagentStatus: "analysing",
+        lastActivityByAgentName: "agent-1",
+        lastActivityAt: expect.any(Date),
+        subagentStatusUpdatedAt: expect.any(Date),
+      }),
+    );
+    expect(repository.update.mock.calls[0]?.[1]).not.toHaveProperty(
+      "activityAuthorName",
+    );
+  });
+
+  it("marks subagent progress done when a ticket is reported completed", async () => {
+    const inProgressTicket = {
+      ...ticket,
+      status: "in_progress" as const,
+      subagentStatus: "verifying" as const,
+    };
+    const completedTicket = {
+      ...inProgressTicket,
+      status: "completed" as const,
+      subagentStatus: "done" as const,
+      completedAt: new Date("2026-01-02T00:00:00Z"),
+    };
+    repository.findById
+      .mockResolvedValueOnce(inProgressTicket)
+      .mockResolvedValueOnce(completedTicket);
+    goalsRepository.findById.mockResolvedValue(goal);
+    repository.update.mockResolvedValue(completedTicket);
+
+    const result = await service.report(ticket.id, {
+      status: "completed",
+      activityAuthorName: "agent-1",
+    });
+
+    expect(result.subagentStatus).toBe("done");
+    expect(repository.update).toHaveBeenCalledWith(
+      ticket.id,
+      expect.objectContaining({
+        status: "completed",
+        subagentStatus: "done",
+        lastActivityByAgentName: "agent-1",
+        lastActivityAt: expect.any(Date),
+        subagentStatusUpdatedAt: expect.any(Date),
+      }),
+    );
   });
 });

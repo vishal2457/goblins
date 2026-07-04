@@ -1,10 +1,10 @@
-CREATE TYPE "public"."execution_mode" AS ENUM('direct', 'worktree');--> statement-breakpoint
 CREATE TYPE "public"."step_color" AS ENUM('slate', 'blue', 'amber', 'green', 'red');--> statement-breakpoint
 CREATE TYPE "public"."goal_item_kind" AS ENUM('constraint', 'acceptance_criterion', 'relevant_file', 'out_of_scope_item');--> statement-breakpoint
 CREATE TYPE "public"."goal_status" AS ENUM('draft', 'planning', 'ready', 'running', 'paused', 'blocked', 'verifying', 'retrospective', 'completed', 'failed', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."ticket_comment_kind" AS ENUM('note', 'question', 'decision', 'blocker');--> statement-breakpoint
 CREATE TYPE "public"."ticket_item_kind" AS ENUM('acceptance_criterion', 'technical_note', 'relevant_file', 'test_plan_item', 'verification_command');--> statement-breakpoint
 CREATE TYPE "public"."ticket_priority" AS ENUM('low', 'medium', 'high', 'critical');--> statement-breakpoint
+CREATE TYPE "public"."ticket_subagent_status" AS ENUM('analysing', 'executing', 'verifying', 'done');--> statement-breakpoint
 CREATE TYPE "public"."ticket_status" AS ENUM('backlog', 'ready', 'blocked', 'in_progress', 'review', 'failed', 'completed', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."ticket_type" AS ENUM('research', 'test', 'implementation', 'refactor', 'integration', 'verification', 'documentation');--> statement-breakpoint
 CREATE TABLE "project_modules" (
@@ -28,12 +28,6 @@ CREATE TABLE "projects" (
 	"name" text NOT NULL,
 	"location" text NOT NULL,
 	"description" text,
-	"base_branch" text DEFAULT 'main' NOT NULL,
-	"execution_mode" "execution_mode" DEFAULT 'direct' NOT NULL,
-	"test_command" text,
-	"lint_command" text,
-	"type_check_command" text,
-	"build_command" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -111,6 +105,11 @@ CREATE TABLE "tickets" (
 	"priority" "ticket_priority" DEFAULT 'medium' NOT NULL,
 	"retry_count" integer DEFAULT 0 NOT NULL,
 	"maximum_retries" integer DEFAULT 3 NOT NULL,
+	"assigned_subagent_name" text,
+	"subagent_status" "ticket_subagent_status",
+	"subagent_status_updated_at" timestamp with time zone,
+	"last_activity_at" timestamp with time zone,
+	"last_activity_by_agent_name" text,
 	"worktree_path" text,
 	"branch_name" text,
 	"started_at" timestamp with time zone,

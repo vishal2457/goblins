@@ -1,5 +1,5 @@
 {
-  "name": "@goblins/goblins-cli",
+  "name": "goblins-cli",
   "version": "0.0.0",
   "description": "Goblins local server and web UI CLI",
   "bin": {
@@ -33,7 +33,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.3",
     "@iarna/toml": "^2.2.5",
-    "@goblins/shared-constants": "workspace:^",
+    "goblins-shared-constants": "workspace:^",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "bcryptjs": "2.4.3",

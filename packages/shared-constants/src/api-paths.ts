@@ -8,12 +8,27 @@ export const API_PATHS = {
   projectAgentInstructions: (id: string) =>
     `${API_V1_PREFIX}/projects/${id}/agents/instructions`,
 
+  workflow: `${API_V1_PREFIX}/workflow`,
+  workflowPresets: `${API_V1_PREFIX}/workflow/presets`,
+  workflowPreset: (id: string) => `${API_V1_PREFIX}/workflow/presets/${id}`,
+  workflowReset: `${API_V1_PREFIX}/workflow/reset`,
+
   moduleTickets: (id: string) => `${API_V1_PREFIX}/modules/${id}/tickets`,
 
   goals: `${API_V1_PREFIX}/goals`,
   goalById: (id: string) => `${API_V1_PREFIX}/goals/${id}`,
   goalTicketsSnapshot: (id: string) =>
     `${API_V1_PREFIX}/goals/${id}/goal-tickets-snapshot`,
+  goalOverview: (id: string) => `${API_V1_PREFIX}/goals/${id}/overview`,
+  goalImprovements: (id: string) => `${API_V1_PREFIX}/goals/${id}/improvements`,
+  goalRetrospectiveAnalyse: (id: string) =>
+    `${API_V1_PREFIX}/goals/${id}/retrospective/analyse`,
+  goalImprovementApprove: (id: string, proposalId: string) =>
+    `${API_V1_PREFIX}/goals/${id}/improvements/${proposalId}/approve`,
+  goalImprovementReject: (id: string, proposalId: string) =>
+    `${API_V1_PREFIX}/goals/${id}/improvements/${proposalId}/reject`,
+  goalImprovementApply: (id: string, proposalId: string) =>
+    `${API_V1_PREFIX}/goals/${id}/improvements/${proposalId}/apply`,
   goalPlanningStart: (id: string) =>
     `${API_V1_PREFIX}/goals/${id}/planning/start`,
   goalPlanningComplete: (id: string) =>

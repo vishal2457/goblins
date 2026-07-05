@@ -120,6 +120,108 @@ export const registerGoalTools: RegisterTools = (server, client) => {
   );
 
   server.registerTool(
+    "goal_overview_get",
+    {
+      title: "Get goal overview",
+      description:
+        "Get compact retrospective analysis context for a Goblins goal.",
+      inputSchema: {
+        id: uuidSchema,
+      },
+    },
+    withApiErrors((args) => client.request(apiPaths.goalOverview(args.id))),
+  );
+
+  server.registerTool(
+    "goal_retrospective_analyse",
+    {
+      title: "Analyse goal retrospective",
+      description:
+        "Create instruction-only workflow/subagent improvement proposals for a goal.",
+      inputSchema: {
+        id: uuidSchema,
+        userPoints: z.string().trim().max(4000).optional(),
+      },
+    },
+    withApiErrors(({ id, ...body }) =>
+      client.request(apiPaths.goalRetrospectiveAnalyse(id), {
+        method: "POST",
+        body,
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "goal_improvements_list",
+    {
+      title: "List goal improvements",
+      description:
+        "List retrospective observations and instruction improvement proposals for a goal.",
+      inputSchema: {
+        id: uuidSchema,
+      },
+    },
+    withApiErrors((args) => client.request(apiPaths.goalImprovements(args.id))),
+  );
+
+  server.registerTool(
+    "goal_improvement_approve",
+    {
+      title: "Approve goal improvement",
+      description:
+        "Approve an instruction improvement proposal, optionally replacing the proposed instruction text.",
+      inputSchema: {
+        id: uuidSchema,
+        proposalId: uuidSchema,
+        proposedInstructions: z.string().trim().min(1).max(100_000).optional(),
+      },
+    },
+    withApiErrors(({ id, proposalId, ...body }) =>
+      client.request(apiPaths.goalImprovementApprove(id, proposalId), {
+        method: "POST",
+        body,
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "goal_improvement_reject",
+    {
+      title: "Reject goal improvement",
+      description: "Reject an instruction improvement proposal.",
+      inputSchema: {
+        id: uuidSchema,
+        proposalId: uuidSchema,
+        reason: z.string().trim().max(4000).optional(),
+      },
+    },
+    withApiErrors(({ id, proposalId, ...body }) =>
+      client.request(apiPaths.goalImprovementReject(id, proposalId), {
+        method: "POST",
+        body,
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "goal_improvement_apply",
+    {
+      title: "Apply goal improvement",
+      description:
+        "Apply an approved workflow or subagent instruction improvement through the existing edit path.",
+      inputSchema: {
+        id: uuidSchema,
+        proposalId: uuidSchema,
+      },
+    },
+    withApiErrors(({ id, proposalId }) =>
+      client.request(apiPaths.goalImprovementApply(id, proposalId), {
+        method: "POST",
+      }),
+    ),
+  );
+
+  server.registerTool(
     "goal_planning_start",
     {
       title: "Start goal planning",

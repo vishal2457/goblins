@@ -1,4 +1,4 @@
-import type { DiscoveredAgent, Project } from "@goblins/shared-constants";
+import type { DiscoveredAgent, Project } from "goblins-shared-constants";
 import {
   Brain,
   ChevronDown,

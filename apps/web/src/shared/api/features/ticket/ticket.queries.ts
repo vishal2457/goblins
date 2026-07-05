@@ -3,7 +3,7 @@ import type {
   BoardStepId,
   Ticket,
   TicketStatus,
-} from "@goblins/shared-constants";
+} from "goblins-shared-constants";
 import { useToast } from "../../../../components/ui/toaster";
 import type { DashboardData } from "../../core";
 import { queryKeys } from "../../query-keys";

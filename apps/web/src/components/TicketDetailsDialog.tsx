@@ -8,7 +8,7 @@ import {
   type Ticket,
   type TicketComment,
   type TicketCommentKind,
-} from "@goblins/shared-constants";
+} from "goblins-shared-constants";
 import { Badge } from "./ui/badge";
 import {
   Dialog,

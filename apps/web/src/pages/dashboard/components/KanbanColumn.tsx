@@ -21,7 +21,7 @@ import {
   type BoardStepId,
   type Ticket,
   type TicketStatus,
-} from "@goblins/shared-constants";
+} from "goblins-shared-constants";
 import { Badge } from "../../../components/ui/badge";
 import { Card } from "../../../components/ui/card";
 

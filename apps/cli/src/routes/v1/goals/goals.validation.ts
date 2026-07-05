@@ -2,7 +2,14 @@ import { z } from "zod";
 
 const goalPhaseSchema = z.object({
   id: z.enum(["planning", "execution", "retrospective"]),
-  status: z.enum(["pending", "in_progress", "paused", "completed", "failed", "cancelled"]),
+  status: z.enum([
+    "pending",
+    "in_progress",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
   position: z.number().int().min(0).max(2),
   startedAt: z.string().datetime().optional(),
   completedAt: z.string().datetime().optional(),
@@ -10,6 +17,11 @@ const goalPhaseSchema = z.object({
 
 export const goalIdParamSchema = z.object({
   id: z.string().uuid(),
+});
+
+export const goalImprovementParamSchema = z.object({
+  id: z.string().uuid(),
+  proposalId: z.string().uuid(),
 });
 
 export const goalListQuerySchema = z.object({
@@ -44,11 +56,24 @@ export const createGoalSchema = z.object({
   completedAt: z.string().datetime().nullable().optional(),
 });
 
-export const updateGoalSchema = createGoalSchema.partial().refine(
-  (data) => Object.keys(data).length > 0,
-  { message: "At least one field is required" },
-);
+export const updateGoalSchema = createGoalSchema
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field is required",
+  });
 
 export const startRetrospectiveSchema = z.object({
   userPoints: z.string().trim().max(4000).optional(),
+});
+
+export const analyseRetrospectiveSchema = z.object({
+  userPoints: z.string().trim().max(4000).optional(),
+});
+
+export const approveImprovementSchema = z.object({
+  proposedInstructions: z.string().trim().min(1).max(100_000).optional(),
+});
+
+export const rejectImprovementSchema = z.object({
+  reason: z.string().trim().max(4000).optional(),
 });

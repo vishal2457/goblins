@@ -1,4 +1,4 @@
-import { API_PATHS } from "@goblins/shared-constants";
+import { API_PATHS } from "goblins-shared-constants";
 
 export const realtimeApi = {
   eventsUrl: () => {

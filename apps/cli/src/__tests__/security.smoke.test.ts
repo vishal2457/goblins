@@ -75,11 +75,11 @@ describe("Production security headers & health", () => {
 
   it("rejects injection-style keys in body", async () => {
     const res = await request(app)
-      .post("/api/v1/users")
+      .post("/api/v1/projects")
       .set("Authorization", "Bearer not-a-real-token")
       .send({ name: "x", "$ne": null, "$$root": 1 });
-    // Should be 401 (auth fails before sanitization on this route), but
-    // importantly, it must not crash and should not echo the prototype keys.
+    // Should fail validation/auth, but importantly, it must not crash and
+    // should not echo the prototype keys.
     expect([400, 401, 403]).toContain(res.status);
     expect(res.body).not.toHaveProperty("$ne");
     expect(res.body).not.toHaveProperty("$$root");

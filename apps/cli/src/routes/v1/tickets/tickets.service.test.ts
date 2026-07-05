@@ -6,9 +6,14 @@ import {
   BadRequestError,
   NotFoundError,
 } from "../../../shared/utils/http-errors.util";
-import { GoalsRepository } from "../goals/goals.repo";
-import { TicketsRepository } from "./tickets.repo";
+import type { AuditService } from "../audit/audit.service";
+import type { GoalsRepository } from "../goals/goals.repo";
+import type { TicketsRepository } from "./tickets.repo";
 import { TicketsService } from "./tickets.service";
+
+vi.mock("../../../shared/db/index", () => ({
+  db: {},
+}));
 
 const projectId = "21a759ff-944d-4336-a522-4e0b3c57172e";
 const otherProjectId = "9dc0f0e8-f306-4787-95ed-db8f1f11eb9f";
@@ -81,9 +86,11 @@ describe("TicketsService module assignment", () => {
     updateGoal: vi.fn(),
   };
   const goalsRepository = { findById: vi.fn() };
+  const auditService = { logChange: vi.fn() };
   const service = new TicketsService(
     repository as unknown as TicketsRepository,
     goalsRepository as unknown as GoalsRepository,
+    auditService as unknown as AuditService,
   );
 
   beforeEach(() => {
@@ -92,6 +99,7 @@ describe("TicketsService module assignment", () => {
     repository.setDependencies.mockResolvedValue(undefined);
     repository.releaseReadyDependents.mockResolvedValue(0);
     repository.goalHasOpenTickets.mockResolvedValue(true);
+    auditService.logChange.mockResolvedValue(undefined);
   });
 
   it("creates a ticket when its module belongs to the goal project", async () => {

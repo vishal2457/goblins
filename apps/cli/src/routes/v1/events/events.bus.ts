@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import type { RealtimeEvent, RealtimeEventType } from "@goblins/shared-constants";
+import type { RealtimeEvent, RealtimeEventType } from "goblins-shared-constants";
 import { randomUUID } from "crypto";
 
 type Client = {

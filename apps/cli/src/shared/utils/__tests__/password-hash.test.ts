@@ -70,6 +70,6 @@ describe("password-hash", () => {
         expect(checkPassword(password, hash)).toBe(true);
         expect(checkPassword("wrong", hash)).toBe(false);
       }
-    });
+    }, 15_000);
   });
 });

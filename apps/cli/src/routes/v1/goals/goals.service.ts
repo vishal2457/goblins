@@ -1,18 +1,105 @@
+import crypto from "node:crypto";
 import type { NewGoal, Goal } from "../../../shared/db/schema/goals";
+import type {
+  InstructionImprovementProposal,
+  NewInstructionImprovementProposal,
+  NewRetrospectiveObservation,
+  RetrospectiveObservation,
+} from "../../../shared/db/schema/goals";
 import {
   BadRequestError,
   ConflictError,
   NotFoundError,
 } from "../../../shared/utils/http-errors.util";
-import { TicketsRepository, type TicketDependencyEdge } from "../tickets/tickets.repo";
+import {
+  TicketsRepository,
+  type TicketDependencyEdge,
+} from "../tickets/tickets.repo";
 import { GoalsRepository, type GoalList } from "./goals.repo";
 import type { Ticket } from "../../../shared/db/schema/tickets";
 import { AuditAction, AuditModule } from "../audit/audit.constants";
 import { AuditService } from "../audit/audit.service";
+import { WorkflowService } from "../workflow/workflow.service";
+import {
+  discoverProjectAgents,
+  updateDiscoveredAgentInstructions,
+} from "../projects/project-agents.discovery";
+import type { AuditLog } from "../audit/audit.repo";
+import type { TicketComment } from "../../../shared/db/schema/tickets";
+import type { DiscoveredAgent } from "goblins-shared-constants";
 
 type GoalPhase = NonNullable<Goal["phases"]>[number];
 export type StartRetrospectiveRequest = {
   userPoints?: string;
+};
+
+type EvidenceReference = {
+  type: string;
+  id?: string;
+  summary: string;
+};
+
+export type GoalOverview = {
+  goal: Goal;
+  tickets: Array<
+    Ticket & {
+      commentCount: number;
+      importantComments: TicketComment[];
+      signals: string[];
+    }
+  >;
+  ticketStatusCounts: Record<string, number>;
+  ticketTypeCounts: Record<string, number>;
+  subagentCounts: Record<string, number>;
+  failurePoints: Array<{
+    ticketId: string;
+    title: string;
+    status: Ticket["status"];
+    retryCount: number;
+    assignedSubagentName: string | null;
+    signals: string[];
+  }>;
+  importantComments: TicketComment[];
+  auditSummary: {
+    total: number;
+    actionCounts: Record<string, number>;
+    recent: AuditLog[];
+  };
+  verification: {
+    ticketsMissingEvidence: string[];
+    evidenceCommentCount: number;
+  };
+};
+
+export type ImprovementAnalysisResult = {
+  retrospective: {
+    id: string;
+    goalId: string;
+    summary: string;
+    userPoints: string | null;
+  };
+  observations: RetrospectiveObservation[];
+  proposals: InstructionImprovementProposal[];
+};
+
+export type ImprovementList = {
+  retrospectives: Awaited<
+    ReturnType<GoalsRepository["findRetrospectivesByGoal"]>
+  >;
+  observations: RetrospectiveObservation[];
+  proposals: InstructionImprovementProposal[];
+};
+
+export type AnalyseRetrospectiveRequest = {
+  userPoints?: string;
+};
+
+export type ApproveImprovementRequest = {
+  proposedInstructions?: string;
+};
+
+export type RejectImprovementRequest = {
+  reason?: string;
 };
 
 export type GoalTicketsSnapshot = {
@@ -48,6 +135,7 @@ export class GoalsService {
     private readonly repository = new GoalsRepository(),
     private readonly ticketsRepository = new TicketsRepository(),
     private readonly auditService = new AuditService(),
+    private readonly workflowService = new WorkflowService(),
   ) {}
 
   async create(data: NewGoal): Promise<Goal> {
@@ -141,6 +229,293 @@ export class GoalsService {
     };
   }
 
+  async goalOverview(id: string): Promise<GoalOverview> {
+    const goal = await this.findById(id);
+    const tickets = await this.ticketsRepository.findByGoal(goal.id);
+    const [comments, auditLogs] = await Promise.all([
+      this.repository.findCommentsByTicketIds(
+        tickets.map((ticket) => ticket.id),
+      ),
+      this.auditService.getAuditsByEntity("goal", goal.id),
+    ]);
+    const commentsByTicket = groupCommentsByTicket(comments);
+    const ticketStatusCounts = countBy(tickets, (ticket) => ticket.status);
+    const ticketTypeCounts = countBy(tickets, (ticket) => ticket.type);
+    const subagentCounts = countBy(
+      tickets,
+      (ticket) => ticket.assignedSubagentName ?? "unassigned",
+    );
+    const overviewTickets = tickets.map((ticket) => {
+      const ticketComments = commentsByTicket.get(ticket.id) ?? [];
+      const signals = ticketSignals(ticket, ticketComments);
+      return {
+        ...ticket,
+        commentCount: ticketComments.length,
+        importantComments: selectImportantComments(ticketComments, 5),
+        signals,
+      };
+    });
+    const failurePoints = overviewTickets
+      .filter(
+        (ticket) =>
+          ticket.status === "failed" ||
+          ticket.status === "blocked" ||
+          ticket.retryCount > 0 ||
+          ticket.signals.length > 0,
+      )
+      .map((ticket) => ({
+        ticketId: ticket.id,
+        title: ticket.title,
+        status: ticket.status,
+        retryCount: ticket.retryCount,
+        assignedSubagentName: ticket.assignedSubagentName,
+        signals: ticket.signals,
+      }));
+    const allImportantComments = selectImportantComments(comments, 30);
+    const evidenceCommentCount = comments.filter(isVerificationComment).length;
+    return {
+      goal,
+      tickets: overviewTickets,
+      ticketStatusCounts,
+      ticketTypeCounts,
+      subagentCounts,
+      failurePoints,
+      importantComments: allImportantComments,
+      auditSummary: {
+        total: auditLogs.length,
+        actionCounts: countBy(auditLogs, (log) => log.action),
+        recent: auditLogs.slice(0, 20),
+      },
+      verification: {
+        ticketsMissingEvidence: overviewTickets
+          .filter(
+            (ticket) =>
+              ticket.status === "completed" &&
+              !(commentsByTicket.get(ticket.id) ?? []).some(
+                isVerificationComment,
+              ),
+          )
+          .map((ticket) => ticket.id),
+        evidenceCommentCount,
+      },
+    };
+  }
+
+  async analyseRetrospective(
+    id: string,
+    request: AnalyseRetrospectiveRequest = {},
+  ): Promise<ImprovementAnalysisResult> {
+    const overview = await this.goalOverview(id);
+    const project = await this.repository.findProjectByGoal(id);
+    if (!project) throw new NotFoundError(`Project for goal ${id} not found`);
+
+    const workflow = this.workflowService.getWorkflow();
+    const agents = await discoverProjectAgents(project.location).catch(() => ({
+      agents: [] as DiscoveredAgent[],
+    }));
+    const workflowEvidence = workflowEvidenceFromOverview(overview);
+    const observations = buildObservations(overview, workflowEvidence);
+    const proposals = buildInstructionProposals({
+      overview,
+      workflowContent: workflow.content,
+      workflowPath: workflow.sourcePath,
+      discoveredAgents: agents.agents,
+      workflowEvidence,
+    });
+    const summary = buildRetrospectiveSummary(overview, proposals.length);
+    const retrospective = await this.repository.createRetrospective({
+      goalId: id,
+      userPoints: request.userPoints?.trim() || null,
+      summary,
+    });
+    const createdObservations =
+      await this.repository.createRetrospectiveObservations(
+        observations.map((observation, position) => ({
+          ...observation,
+          goalId: id,
+          retrospectiveId: retrospective.id,
+          position,
+        })),
+      );
+    const createdProposals = await this.repository.createInstructionProposals(
+      proposals.map((proposal) => ({
+        ...proposal,
+        goalId: id,
+        retrospectiveId: retrospective.id,
+      })),
+    );
+    await this.logGoalEvent(
+      overview.goal,
+      AuditAction.ANALYSE_RETROSPECTIVE,
+      "Retrospective analysed",
+      {
+        retrospectiveId: retrospective.id,
+        observationCount: createdObservations.length,
+        proposalCount: createdProposals.length,
+      },
+    );
+    return {
+      retrospective: {
+        id: retrospective.id,
+        goalId: retrospective.goalId,
+        summary: retrospective.summary,
+        userPoints: retrospective.userPoints,
+      },
+      observations: createdObservations,
+      proposals: createdProposals,
+    };
+  }
+
+  async listImprovements(id: string): Promise<ImprovementList> {
+    await this.findById(id);
+    const [retrospectives, observations, proposals] = await Promise.all([
+      this.repository.findRetrospectivesByGoal(id),
+      this.repository.findObservationsByGoal(id),
+      this.repository.findInstructionProposalsByGoal(id),
+    ]);
+    return { retrospectives, observations, proposals };
+  }
+
+  async approveImprovement(
+    goalId: string,
+    proposalId: string,
+    request: ApproveImprovementRequest = {},
+  ): Promise<InstructionImprovementProposal> {
+    const goal = await this.findById(goalId);
+    const proposal = await this.findGoalProposal(goalId, proposalId);
+    if (proposal.status === "rejected" || proposal.status === "applied") {
+      throw new ConflictError(
+        `Cannot approve improvement from status ${proposal.status}`,
+      );
+    }
+    const updated = await this.repository.updateInstructionProposal(
+      proposalId,
+      {
+        proposedInstructions:
+          request.proposedInstructions?.trim() || proposal.proposedInstructions,
+        status: "approved",
+        approvedAt: new Date(),
+      },
+    );
+    if (!updated)
+      throw new NotFoundError(`Improvement proposal ${proposalId} not found`);
+    await this.logGoalEvent(
+      goal,
+      AuditAction.APPROVE_IMPROVEMENT,
+      "Improvement approved",
+      {
+        proposalId,
+        targetType: updated.targetType,
+        targetId: updated.targetId,
+      },
+    );
+    return updated;
+  }
+
+  async rejectImprovement(
+    goalId: string,
+    proposalId: string,
+    request: RejectImprovementRequest = {},
+  ): Promise<InstructionImprovementProposal> {
+    const goal = await this.findById(goalId);
+    const proposal = await this.findGoalProposal(goalId, proposalId);
+    if (proposal.status === "applied") {
+      throw new ConflictError("Applied improvements cannot be rejected");
+    }
+    const updated = await this.repository.updateInstructionProposal(
+      proposalId,
+      {
+        status: "rejected",
+        rejectedAt: new Date(),
+      },
+    );
+    if (!updated)
+      throw new NotFoundError(`Improvement proposal ${proposalId} not found`);
+    await this.logGoalEvent(
+      goal,
+      AuditAction.REJECT_IMPROVEMENT,
+      "Improvement rejected",
+      {
+        proposalId,
+        targetType: updated.targetType,
+        targetId: updated.targetId,
+        reason: request.reason,
+      },
+    );
+    return updated;
+  }
+
+  async applyImprovement(
+    goalId: string,
+    proposalId: string,
+  ): Promise<InstructionImprovementProposal> {
+    const goal = await this.findById(goalId);
+    const proposal = await this.findGoalProposal(goalId, proposalId);
+    if (proposal.status !== "approved") {
+      throw new ConflictError(
+        `Improvement must be approved before applying; current status is ${proposal.status}`,
+      );
+    }
+    let beforeSnapshot: string | null = null;
+    let afterSnapshot = proposal.proposedInstructions;
+
+    if (proposal.targetType === "workflow_instruction") {
+      const workflow = this.workflowService.getWorkflow();
+      beforeSnapshot = workflow.content;
+      afterSnapshot = this.workflowService.updateWorkflow(
+        proposal.proposedInstructions,
+      ).content;
+    } else if (proposal.targetType === "subagent_instruction") {
+      const project = await this.repository.findProjectByGoal(goalId);
+      if (!project)
+        throw new NotFoundError(`Project for goal ${goalId} not found`);
+      const discovered = await discoverProjectAgents(project.location);
+      const agent = discovered.agents.find(
+        (candidate) => candidate.id === proposal.targetId,
+      );
+      if (!agent?.sourcePath) {
+        throw new BadRequestError(
+          "Subagent improvement target is not backed by an editable file",
+        );
+      }
+      beforeSnapshot = agent.instructions ?? "";
+      const updated = await updateDiscoveredAgentInstructions({
+        projectDir: project.location,
+        agentId: proposal.targetId,
+        instructions: proposal.proposedInstructions,
+      });
+      afterSnapshot = updated.instructions || proposal.proposedInstructions;
+    } else {
+      throw new BadRequestError("Unsupported improvement target");
+    }
+
+    const updated = await this.repository.updateInstructionProposal(
+      proposalId,
+      {
+        status: "applied",
+        beforeSnapshot: proposal.beforeSnapshot ?? beforeSnapshot,
+        afterSnapshot,
+        appliedAt: new Date(),
+      },
+    );
+    if (!updated)
+      throw new NotFoundError(`Improvement proposal ${proposalId} not found`);
+    await this.logGoalEvent(
+      goal,
+      AuditAction.APPLY_IMPROVEMENT,
+      "Improvement applied",
+      {
+        proposalId,
+        targetType: updated.targetType,
+        targetId: updated.targetId,
+        beforeHash: hashText(beforeSnapshot ?? ""),
+        afterHash: hashText(afterSnapshot),
+        evidence: updated.evidence,
+      },
+    );
+    return updated;
+  }
+
   async update(id: string, data: Partial<NewGoal>): Promise<Goal> {
     const existing = await this.findById(id);
     let patch = data;
@@ -194,10 +569,15 @@ export class GoalsService {
       phases: updatePhase(goal.phases, "planning", "in_progress"),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
-    await this.logGoalEvent(updated, AuditAction.START_PLANNING, "Planning started", {
-      previousStatus: goal.status,
-      nextStatus: updated.status,
-    });
+    await this.logGoalEvent(
+      updated,
+      AuditAction.START_PLANNING,
+      "Planning started",
+      {
+        previousStatus: goal.status,
+        nextStatus: updated.status,
+      },
+    );
     return updated;
   }
 
@@ -214,11 +594,16 @@ export class GoalsService {
       phases: updatePhase(goal.phases, "planning", "completed"),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
-    await this.logGoalEvent(updated, AuditAction.COMPLETE_PLANNING, "Planning completed", {
-      previousStatus: goal.status,
-      nextStatus: updated.status,
-      ticketCount,
-    });
+    await this.logGoalEvent(
+      updated,
+      AuditAction.COMPLETE_PLANNING,
+      "Planning completed",
+      {
+        previousStatus: goal.status,
+        nextStatus: updated.status,
+        ticketCount,
+      },
+    );
     return updated;
   }
 
@@ -242,10 +627,15 @@ export class GoalsService {
       ),
     });
     if (!updated) throw new NotFoundError(`Goal with ID ${id} not found`);
-    await this.logGoalEvent(updated, AuditAction.START_EXECUTION, "Execution started", {
-      previousStatus: goal.status,
-      nextStatus: updated.status,
-    });
+    await this.logGoalEvent(
+      updated,
+      AuditAction.START_EXECUTION,
+      "Execution started",
+      {
+        previousStatus: goal.status,
+        nextStatus: updated.status,
+      },
+    );
     return updated;
   }
 
@@ -327,6 +717,20 @@ export class GoalsService {
     return goal;
   }
 
+  private async findGoalProposal(
+    goalId: string,
+    proposalId: string,
+  ): Promise<InstructionImprovementProposal> {
+    const proposal =
+      await this.repository.findInstructionProposalById(proposalId);
+    if (!proposal || proposal.goalId !== goalId) {
+      throw new NotFoundError(
+        `Improvement proposal ${proposalId} not found for goal ${goalId}`,
+      );
+    }
+    return proposal;
+  }
+
   private async logGoalEvent(
     goal: Goal,
     action: AuditAction,
@@ -394,7 +798,9 @@ function computeParallelBatches(
     const dependencies = dependencyIdsByTicket.get(ticketId) ?? [];
     const hasNonSchedulableBlocker = dependencies.some((dependencyId) => {
       const dependency = ticketById.get(dependencyId);
-      return dependency?.status !== "completed" && !eligibleIds.has(dependencyId);
+      return (
+        dependency?.status !== "completed" && !eligibleIds.has(dependencyId)
+      );
     });
     if (hasNonSchedulableBlocker) eligibleIds.delete(ticketId);
   }
@@ -414,13 +820,17 @@ function computeParallelBatches(
       ),
     );
     if (batch.length === 0) {
-      warnings.push("Dependency graph contains a cycle or unresolved prerequisite");
+      warnings.push(
+        "Dependency graph contains a cycle or unresolved prerequisite",
+      );
       break;
     }
     batch.sort((left, right) => {
       const leftTicket = ticketById.get(left);
       const rightTicket = ticketById.get(right);
-      return priorityRank(rightTicket?.priority) - priorityRank(leftTicket?.priority);
+      return (
+        priorityRank(rightTicket?.priority) - priorityRank(leftTicket?.priority)
+      );
     });
     batches.push(batch);
     for (const ticketId of batch) {
@@ -438,6 +848,305 @@ function priorityRank(priority: Ticket["priority"] | undefined): number {
   if (priority === "medium") return 2;
   if (priority === "low") return 1;
   return 0;
+}
+
+function groupCommentsByTicket(
+  comments: TicketComment[],
+): Map<string, TicketComment[]> {
+  const grouped = new Map<string, TicketComment[]>();
+  for (const comment of comments) {
+    const bucket = grouped.get(comment.ticketId) ?? [];
+    bucket.push(comment);
+    grouped.set(comment.ticketId, bucket);
+  }
+  return grouped;
+}
+
+function countBy<T>(
+  values: T[],
+  getKey: (value: T) => string,
+): Record<string, number> {
+  return values.reduce<Record<string, number>>((result, value) => {
+    const key = getKey(value);
+    result[key] = (result[key] ?? 0) + 1;
+    return result;
+  }, {});
+}
+
+function selectImportantComments(
+  comments: TicketComment[],
+  limit: number,
+): TicketComment[] {
+  return [...comments]
+    .sort((left, right) => {
+      const leftRank = commentRank(left);
+      const rightRank = commentRank(right);
+      if (leftRank !== rightRank) return rightRank - leftRank;
+      return right.createdAt.getTime() - left.createdAt.getTime();
+    })
+    .slice(0, limit);
+}
+
+function commentRank(comment: TicketComment): number {
+  if (comment.kind === "blocker") return 5;
+  if (comment.kind === "question") return 4;
+  if (comment.kind === "decision") return 3;
+  if (isVerificationComment(comment)) return 2;
+  return 1;
+}
+
+function isVerificationComment(comment: TicketComment): boolean {
+  return /\b(test|verified|verification|check|command|build|lint|typecheck|evidence)\b/i.test(
+    comment.body,
+  );
+}
+
+function ticketSignals(ticket: Ticket, comments: TicketComment[]): string[] {
+  const signals: string[] = [];
+  if (ticket.status === "failed") signals.push("ticket_failed");
+  if (ticket.status === "blocked") signals.push("ticket_blocked");
+  if (ticket.retryCount > 0) signals.push("ticket_retried");
+  if (!ticket.assignedSubagentName) signals.push("missing_subagent_assignment");
+  if (!ticket.shortDescription && !ticket.description) {
+    signals.push("missing_scope_description");
+  }
+  if (comments.length === 0) signals.push("missing_progress_comments");
+  if (comments.some((comment) => comment.kind === "question")) {
+    signals.push("contains_question");
+  }
+  if (comments.some((comment) => comment.kind === "blocker")) {
+    signals.push("contains_blocker");
+  }
+  if (ticket.status === "completed" && !comments.some(isVerificationComment)) {
+    signals.push("missing_verification_evidence");
+  }
+  return signals;
+}
+
+function workflowEvidenceFromOverview(
+  overview: GoalOverview,
+): EvidenceReference[] {
+  const evidence: EvidenceReference[] = [];
+  for (const point of overview.failurePoints.slice(0, 10)) {
+    evidence.push({
+      type: "ticket",
+      id: point.ticketId,
+      summary: `${point.title}: ${point.signals.join(", ") || point.status}`,
+    });
+  }
+  for (const comment of overview.importantComments.slice(0, 8)) {
+    evidence.push({
+      type: "ticket_comment",
+      id: comment.id,
+      summary: `${comment.kind}: ${comment.body.slice(0, 180)}`,
+    });
+  }
+  if (overview.verification.ticketsMissingEvidence.length > 0) {
+    evidence.push({
+      type: "goal",
+      id: overview.goal.id,
+      summary: `${overview.verification.ticketsMissingEvidence.length} completed tickets lacked explicit verification evidence.`,
+    });
+  }
+  return evidence;
+}
+
+function buildObservations(
+  overview: GoalOverview,
+  evidence: EvidenceReference[],
+): Array<
+  Omit<NewRetrospectiveObservation, "goalId" | "retrospectiveId" | "position">
+> {
+  const observations: Array<
+    Omit<NewRetrospectiveObservation, "goalId" | "retrospectiveId" | "position">
+  > = [];
+  const missingScope = overview.tickets.filter((ticket) =>
+    ticket.signals.includes("missing_scope_description"),
+  );
+  if (missingScope.length > 0) {
+    observations.push({
+      kind: "planning_gap",
+      summary: `${missingScope.length} tickets had weak scope descriptions.`,
+      evidence: missingScope.map(ticketEvidence),
+    });
+  }
+  const progressGaps = overview.tickets.filter((ticket) =>
+    ticket.signals.includes("missing_progress_comments"),
+  );
+  if (progressGaps.length > 0) {
+    observations.push({
+      kind: "subagent_gap",
+      summary: `${progressGaps.length} tickets lacked durable progress comments.`,
+      evidence: progressGaps.map(ticketEvidence),
+    });
+  }
+  if (overview.verification.ticketsMissingEvidence.length > 0) {
+    observations.push({
+      kind: "verification_gap",
+      summary: `${overview.verification.ticketsMissingEvidence.length} completed tickets had no explicit verification evidence.`,
+      evidence,
+    });
+  }
+  const blockedOrQuestioned = overview.tickets.filter(
+    (ticket) =>
+      ticket.signals.includes("contains_blocker") ||
+      ticket.signals.includes("contains_question"),
+  );
+  if (blockedOrQuestioned.length > 0) {
+    observations.push({
+      kind: "workflow_gap",
+      summary: `${blockedOrQuestioned.length} tickets contained blockers or unresolved questions.`,
+      evidence: blockedOrQuestioned.map(ticketEvidence),
+    });
+  }
+  const failedOrRetried = overview.tickets.filter(
+    (ticket) => ticket.status === "failed" || ticket.retryCount > 0,
+  );
+  if (failedOrRetried.length > 0) {
+    observations.push({
+      kind: "tooling_gap",
+      summary: `${failedOrRetried.length} tickets failed or required retries. This is recorded as an observation, not an applyable system change.`,
+      evidence: failedOrRetried.map(ticketEvidence),
+    });
+  }
+  return observations;
+}
+
+function buildInstructionProposals(input: {
+  overview: GoalOverview;
+  workflowContent: string;
+  workflowPath: string;
+  discoveredAgents: DiscoveredAgent[];
+  workflowEvidence: EvidenceReference[];
+}): Array<
+  Omit<NewInstructionImprovementProposal, "goalId" | "retrospectiveId">
+> {
+  const proposals: Array<
+    Omit<NewInstructionImprovementProposal, "goalId" | "retrospectiveId">
+  > = [];
+  const workflowSignals = new Set(
+    input.overview.failurePoints.flatMap((point) => point.signals),
+  );
+  if (
+    workflowSignals.has("missing_scope_description") ||
+    workflowSignals.has("contains_blocker") ||
+    workflowSignals.has("contains_question") ||
+    workflowSignals.has("missing_verification_evidence")
+  ) {
+    proposals.push({
+      targetType: "workflow_instruction",
+      targetId: input.workflowPath,
+      targetLabel: "Active workflow instructions",
+      proposedInstructions: appendInstructionSection(
+        input.workflowContent,
+        "Self-improvement additions",
+        [
+          "During planning, every ticket must include a concrete expected outcome, acceptance criteria, and verification evidence expected from the assigned subagent.",
+          "During execution, blockers and user questions must be raised in ticket comments as soon as they are discovered, with the smallest decision needed to unblock work.",
+          "Before completing a ticket, require a closing comment that names checks run, evidence collected, and residual risk.",
+        ],
+      ),
+      rationale:
+        "Goal analysis found planning, blocker, or verification signals that can be improved through workflow instructions.",
+      evidence: input.workflowEvidence,
+      beforeSnapshot: input.workflowContent,
+    });
+  }
+
+  const ticketsBySubagent = new Map<string, GoalOverview["tickets"]>();
+  for (const ticket of input.overview.tickets) {
+    if (!ticket.assignedSubagentName) continue;
+    const bucket = ticketsBySubagent.get(ticket.assignedSubagentName) ?? [];
+    bucket.push(ticket);
+    ticketsBySubagent.set(ticket.assignedSubagentName, bucket);
+  }
+  for (const [subagentName, tickets] of ticketsBySubagent) {
+    const subagentSignals = tickets.flatMap((ticket) => ticket.signals);
+    const shouldImprove =
+      subagentSignals.includes("missing_progress_comments") ||
+      subagentSignals.includes("missing_verification_evidence") ||
+      subagentSignals.includes("ticket_failed") ||
+      subagentSignals.includes("ticket_retried");
+    if (!shouldImprove) continue;
+    const agent = findEditableAgent(input.discoveredAgents, subagentName);
+    if (!agent?.sourcePath || !agent.instructions) continue;
+    proposals.push({
+      targetType: "subagent_instruction",
+      targetId: agent.id,
+      targetLabel: agent.displayName || agent.name || subagentName,
+      proposedInstructions: appendInstructionSection(
+        agent.instructions,
+        "Goblins ticket execution improvements",
+        [
+          "At ticket start, add or update a note comment with assumptions, intended approach, and any missing context.",
+          "Move subagentStatus through analysing, executing, verifying, and done as work progresses.",
+          "Before reporting completion, add a concise closing comment with changes made, verification commands or evidence, and residual risks.",
+        ],
+      ),
+      rationale: `Tickets assigned to ${subagentName} showed progress reporting, retry, failure, or verification gaps.`,
+      evidence: tickets.slice(0, 8).map(ticketEvidence),
+      beforeSnapshot: agent.instructions,
+    });
+  }
+  return proposals;
+}
+
+function findEditableAgent(
+  agents: DiscoveredAgent[],
+  subagentName: string,
+): DiscoveredAgent | undefined {
+  const normalized = normalizeName(subagentName);
+  return agents.find((agent) => {
+    const candidates = [
+      agent.id,
+      agent.name,
+      agent.displayName,
+      agent.description,
+    ].filter(Boolean);
+    return candidates.some((candidate) =>
+      normalizeName(String(candidate)).includes(normalized),
+    );
+  });
+}
+
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function appendInstructionSection(
+  content: string,
+  heading: string,
+  bullets: string[],
+): string {
+  const marker = `## ${heading}`;
+  const section = `${marker}\n\n${bullets.map((bullet) => `- ${bullet}`).join("\n")}`;
+  if (content.includes(marker)) return content;
+  return `${content.trim()}\n\n${section}\n`;
+}
+
+function ticketEvidence(
+  ticket: GoalOverview["tickets"][number],
+): EvidenceReference {
+  return {
+    type: "ticket",
+    id: ticket.id,
+    summary: `${ticket.title}: ${ticket.signals.join(", ") || ticket.status}`,
+  };
+}
+
+function buildRetrospectiveSummary(
+  overview: GoalOverview,
+  proposalCount: number,
+): string {
+  return [
+    `${overview.tickets.length} tickets analysed for goal "${overview.goal.title}".`,
+    `${overview.failurePoints.length} tickets produced improvement signals.`,
+    `${proposalCount} instruction-only proposals generated.`,
+  ].join(" ");
+}
+
+function hashText(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
 }
 
 function updateActivePhase(

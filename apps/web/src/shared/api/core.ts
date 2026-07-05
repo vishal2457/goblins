@@ -1,16 +1,21 @@
-import { API_PATHS, STATIC_BOARD_STEPS } from "@goblins/shared-constants";
+import { API_PATHS, STATIC_BOARD_STEPS } from "goblins-shared-constants";
 import type {
   AuditLog,
   BoardStep,
   DiscoveredAgent,
   DiscoveredAgentsResponse,
   Goal,
+  GoalImprovementList,
+  GoalOverview,
+  InstructionImprovementProposal,
   Project,
   ProjectModule,
   Ticket,
   TicketComment,
   TicketCommentKind,
-} from "@goblins/shared-constants";
+  WorkflowDocument,
+  WorkflowPreset,
+} from "goblins-shared-constants";
 import { apiClient } from "./client";
 
 const LIST_LIMIT = 100;
@@ -55,21 +60,16 @@ type DbTicket = Omit<
   | "verificationCommands"
 > & { currentStepId: string | null };
 
-export type ProjectUpdateInput = Partial<
-  Pick<Project, "name" | "location">
-> & { description?: string | null };
+export type ProjectUpdateInput = Partial<Pick<Project, "name" | "location">> & {
+  description?: string | null;
+};
 
 export type GoalUpdateInput = Partial<
   Pick<Goal, "title" | "description" | "technicalInstructions" | "maxRetries">
 >;
 
 export type TicketUpdateInput = Partial<
-  Pick<
-    Ticket,
-    | "status"
-    | "subagentStatus"
-    | "assignedSubagentName"
-  >
+  Pick<Ticket, "status" | "subagentStatus" | "assignedSubagentName">
 > & {
   startedAt?: string | null;
   completedAt?: string | null;
@@ -183,7 +183,9 @@ async function fetchGoalAndTicketLists(): Promise<
 }
 
 export async function listProjects(): Promise<Project[]> {
-  const result = await getResult<ApiList<DbProject>>(listUrl(API_PATHS.projects));
+  const result = await getResult<ApiList<DbProject>>(
+    listUrl(API_PATHS.projects),
+  );
   return result.data.map(mapProject);
 }
 
@@ -225,7 +227,9 @@ export async function createProjectModule(
 export async function discoverProjectAgents(
   projectId: string,
 ): Promise<DiscoveredAgentsResponse> {
-  return getResult<DiscoveredAgentsResponse>(API_PATHS.projectAgents(projectId));
+  return getResult<DiscoveredAgentsResponse>(
+    API_PATHS.projectAgents(projectId),
+  );
 }
 
 export async function updateProjectAgentInstructions(
@@ -240,6 +244,35 @@ export async function updateProjectAgentInstructions(
   return response.result;
 }
 
+export async function getWorkflow(): Promise<WorkflowDocument> {
+  return getResult<WorkflowDocument>(API_PATHS.workflow);
+}
+
+export async function updateWorkflow(data: {
+  content: string;
+}): Promise<WorkflowDocument> {
+  const { data: response } = await apiClient.put<ApiEnvelope<WorkflowDocument>>(
+    API_PATHS.workflow,
+    data,
+  );
+
+  return response.result;
+}
+
+export async function resetWorkflow(): Promise<WorkflowDocument> {
+  return postResult<WorkflowDocument>(API_PATHS.workflowReset);
+}
+
+export async function listWorkflowPresets(): Promise<WorkflowPreset[]> {
+  return getResult<WorkflowPreset[]>(API_PATHS.workflowPresets);
+}
+
+export async function applyWorkflowPreset(
+  id: string,
+): Promise<WorkflowDocument> {
+  return postResult<WorkflowDocument>(API_PATHS.workflowPreset(id));
+}
+
 export async function listGoals(projectId?: string): Promise<Goal[]> {
   const [goalList, ticketList] = await fetchGoalAndTicketLists();
   return mapGoalsWithTickets(goalList, ticketList, projectId);
@@ -247,6 +280,55 @@ export async function listGoals(projectId?: string): Promise<Goal[]> {
 
 export async function getGoal(id: string): Promise<Goal> {
   return mapGoal(await getResult<DbGoal>(API_PATHS.goalById(id)));
+}
+
+export async function getGoalOverview(id: string): Promise<GoalOverview> {
+  return getResult<GoalOverview>(API_PATHS.goalOverview(id));
+}
+
+export async function analyseGoalRetrospective(
+  id: string,
+  data: { userPoints?: string } = {},
+): Promise<{
+  retrospective: {
+    id: string;
+    goalId: string;
+    summary: string;
+    userPoints?: string | null;
+  };
+  observations: GoalImprovementList["observations"];
+  proposals: InstructionImprovementProposal[];
+}> {
+  return postResult(API_PATHS.goalRetrospectiveAnalyse(id), data);
+}
+
+export async function listGoalImprovements(
+  id: string,
+): Promise<GoalImprovementList> {
+  return getResult<GoalImprovementList>(API_PATHS.goalImprovements(id));
+}
+
+export async function approveGoalImprovement(
+  goalId: string,
+  proposalId: string,
+  data: { proposedInstructions?: string } = {},
+): Promise<InstructionImprovementProposal> {
+  return postResult(API_PATHS.goalImprovementApprove(goalId, proposalId), data);
+}
+
+export async function rejectGoalImprovement(
+  goalId: string,
+  proposalId: string,
+  data: { reason?: string } = {},
+): Promise<InstructionImprovementProposal> {
+  return postResult(API_PATHS.goalImprovementReject(goalId, proposalId), data);
+}
+
+export async function applyGoalImprovement(
+  goalId: string,
+  proposalId: string,
+): Promise<InstructionImprovementProposal> {
+  return postResult(API_PATHS.goalImprovementApply(goalId, proposalId));
 }
 
 export async function createGoal(data: {
@@ -367,7 +449,9 @@ export async function listGoalTickets(goalId?: string): Promise<Ticket[]> {
 }
 
 export async function listModuleTickets(moduleId: string): Promise<Ticket[]> {
-  const tickets = await getResult<DbTicket[]>(API_PATHS.moduleTickets(moduleId));
+  const tickets = await getResult<DbTicket[]>(
+    API_PATHS.moduleTickets(moduleId),
+  );
   return tickets.map((ticket) => mapTicket(ticket));
 }
 
@@ -410,7 +494,9 @@ export async function listGoalAuditLogs(
   );
 }
 
-export async function listBoardSteps(_projectId?: string): Promise<BoardStep[]> {
+export async function listBoardSteps(
+  _projectId?: string,
+): Promise<BoardStep[]> {
   return STATIC_BOARD_STEPS;
 }
 

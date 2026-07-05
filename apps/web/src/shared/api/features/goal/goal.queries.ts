@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Goal } from "@goblins/shared-constants";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Goal } from "goblins-shared-constants";
 import { useToast } from "../../../../components/ui/toaster";
 import { queryKeys } from "../../query-keys";
 import { ticketApi } from "../ticket/ticket.api";
@@ -68,7 +68,9 @@ export function useResetGoalPlanningMutation() {
   return useMutation({
     mutationFn: async (goalId: string) => {
       const goalTickets = await goalApi.tickets.list(goalId);
-      await Promise.all(goalTickets.map((ticket) => ticketApi.remove(ticket.id)));
+      await Promise.all(
+        goalTickets.map((ticket) => ticketApi.remove(ticket.id)),
+      );
       return goalApi.reset(goalId);
     },
     onSuccess: (goal) => {
@@ -78,7 +80,9 @@ export function useResetGoalPlanningMutation() {
     onError: (error) => {
       toast.error(
         "Failed to reset planning data",
-        error instanceof Error ? error.message : "Failed to reset planning data",
+        error instanceof Error
+          ? error.message
+          : "Failed to reset planning data",
       );
     },
   });
@@ -191,7 +195,9 @@ export function useStartRetrospectiveMutation() {
     onError: (error) => {
       toast.error(
         "Failed to start retrospective",
-        error instanceof Error ? error.message : "Failed to start retrospective",
+        error instanceof Error
+          ? error.message
+          : "Failed to start retrospective",
       );
     },
   });
@@ -213,6 +219,151 @@ export function useCompleteRetrospectiveMutation() {
         error instanceof Error
           ? error.message
           : "Failed to complete retrospective",
+      );
+    },
+  });
+}
+
+export function useGoalOverviewQuery(goalId?: string) {
+  return useQuery({
+    queryKey: goalId ? queryKeys.goalOverview(goalId) : ["goals", "overview"],
+    queryFn: () => goalApi.overview(goalId!),
+    enabled: Boolean(goalId),
+  });
+}
+
+export function useGoalImprovementsQuery(goalId?: string) {
+  return useQuery({
+    queryKey: goalId
+      ? queryKeys.goalImprovements(goalId)
+      : ["goals", "improvements"],
+    queryFn: () => goalApi.improvements.list(goalId!),
+    enabled: Boolean(goalId),
+  });
+}
+
+export function useAnalyseGoalRetrospectiveMutation() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      goalId,
+      userPoints,
+    }: {
+      goalId: string;
+      userPoints?: string;
+    }) => goalApi.analyseRetrospective(goalId, { userPoints }),
+    onSuccess: (_result, variables) => {
+      toast.success("Retrospective analysed");
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.goalImprovements(variables.goalId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.goalOverview(variables.goalId),
+      });
+      invalidateGoalDependentQueries(queryClient, variables.goalId);
+    },
+    onError: (error) => {
+      toast.error(
+        "Failed to analyse retrospective",
+        error instanceof Error
+          ? error.message
+          : "Failed to analyse retrospective",
+      );
+    },
+  });
+}
+
+export function useApproveGoalImprovementMutation() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      goalId,
+      proposalId,
+      proposedInstructions,
+    }: {
+      goalId: string;
+      proposalId: string;
+      proposedInstructions?: string;
+    }) =>
+      goalApi.improvements.approve(goalId, proposalId, {
+        proposedInstructions,
+      }),
+    onSuccess: (proposal) => {
+      toast.success("Improvement approved", proposal.targetLabel);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.goalImprovements(proposal.goalId),
+      });
+      invalidateGoalDependentQueries(queryClient, proposal.goalId);
+    },
+    onError: (error) => {
+      toast.error(
+        "Failed to approve improvement",
+        error instanceof Error
+          ? error.message
+          : "Failed to approve improvement",
+      );
+    },
+  });
+}
+
+export function useRejectGoalImprovementMutation() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      goalId,
+      proposalId,
+      reason,
+    }: {
+      goalId: string;
+      proposalId: string;
+      reason?: string;
+    }) => goalApi.improvements.reject(goalId, proposalId, { reason }),
+    onSuccess: (proposal) => {
+      toast.success("Improvement rejected", proposal.targetLabel);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.goalImprovements(proposal.goalId),
+      });
+      invalidateGoalDependentQueries(queryClient, proposal.goalId);
+    },
+    onError: (error) => {
+      toast.error(
+        "Failed to reject improvement",
+        error instanceof Error ? error.message : "Failed to reject improvement",
+      );
+    },
+  });
+}
+
+export function useApplyGoalImprovementMutation() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      goalId,
+      proposalId,
+    }: {
+      goalId: string;
+      proposalId: string;
+    }) => goalApi.improvements.apply(goalId, proposalId),
+    onSuccess: (proposal) => {
+      toast.success("Improvement applied", proposal.targetLabel);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.goalImprovements(proposal.goalId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workflow });
+      invalidateGoalDependentQueries(queryClient, proposal.goalId);
+    },
+    onError: (error) => {
+      toast.error(
+        "Failed to apply improvement",
+        error instanceof Error ? error.message : "Failed to apply improvement",
       );
     },
   });

@@ -1,11 +1,26 @@
-import { count, desc, eq } from "drizzle-orm";
+import { asc, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../../shared/db/index";
 import {
+  goalRetrospectives,
   goals,
+  instructionImprovementProposals,
+  retrospectiveObservations,
   type NewGoal,
+  type NewGoalRetrospective,
+  type NewInstructionImprovementProposal,
+  type NewRetrospectiveObservation,
   type Goal,
+  type GoalRetrospective,
+  type InstructionImprovementProposal,
+  type RetrospectiveObservation,
 } from "../../../shared/db/schema/goals";
-import { tickets, ticketDependencies } from "../../../shared/db/schema/tickets";
+import {
+  ticketComments,
+  tickets,
+  ticketDependencies,
+  type TicketComment,
+} from "../../../shared/db/schema/tickets";
+import { projects, type Project } from "../../../shared/db/schema/projects";
 
 export type GoalList = {
   data: Goal[];
@@ -50,6 +65,16 @@ export class GoalsRepository {
     return goal ?? null;
   }
 
+  async findProjectByGoal(goalId: string): Promise<Project | null> {
+    const [row] = await db
+      .select({ project: projects })
+      .from(goals)
+      .innerJoin(projects, eq(goals.projectId, projects.id))
+      .where(eq(goals.id, goalId))
+      .limit(1);
+    return row?.project ?? null;
+  }
+
   async update(id: string, data: Partial<NewGoal>): Promise<Goal | null> {
     const [goal] = await db
       .update(goals)
@@ -67,6 +92,91 @@ export class GoalsRepository {
     return Number(row?.value ?? 0);
   }
 
+  async findCommentsByTicketIds(ticketIds: string[]): Promise<TicketComment[]> {
+    if (!ticketIds.length) return [];
+    return db
+      .select()
+      .from(ticketComments)
+      .where(inArray(ticketComments.ticketId, ticketIds))
+      .orderBy(asc(ticketComments.createdAt));
+  }
+
+  async createRetrospective(
+    data: NewGoalRetrospective,
+  ): Promise<GoalRetrospective> {
+    const [retrospective] = await db
+      .insert(goalRetrospectives)
+      .values(data)
+      .returning();
+    if (!retrospective) throw new Error("Failed to create retrospective");
+    return retrospective;
+  }
+
+  async createRetrospectiveObservations(
+    data: NewRetrospectiveObservation[],
+  ): Promise<RetrospectiveObservation[]> {
+    if (!data.length) return [];
+    return db.insert(retrospectiveObservations).values(data).returning();
+  }
+
+  async createInstructionProposals(
+    data: NewInstructionImprovementProposal[],
+  ): Promise<InstructionImprovementProposal[]> {
+    if (!data.length) return [];
+    return db.insert(instructionImprovementProposals).values(data).returning();
+  }
+
+  async findRetrospectivesByGoal(goalId: string): Promise<GoalRetrospective[]> {
+    return db
+      .select()
+      .from(goalRetrospectives)
+      .where(eq(goalRetrospectives.goalId, goalId))
+      .orderBy(desc(goalRetrospectives.createdAt));
+  }
+
+  async findObservationsByGoal(
+    goalId: string,
+  ): Promise<RetrospectiveObservation[]> {
+    return db
+      .select()
+      .from(retrospectiveObservations)
+      .where(eq(retrospectiveObservations.goalId, goalId))
+      .orderBy(desc(retrospectiveObservations.createdAt));
+  }
+
+  async findInstructionProposalsByGoal(
+    goalId: string,
+  ): Promise<InstructionImprovementProposal[]> {
+    return db
+      .select()
+      .from(instructionImprovementProposals)
+      .where(eq(instructionImprovementProposals.goalId, goalId))
+      .orderBy(desc(instructionImprovementProposals.createdAt));
+  }
+
+  async findInstructionProposalById(
+    id: string,
+  ): Promise<InstructionImprovementProposal | null> {
+    const [proposal] = await db
+      .select()
+      .from(instructionImprovementProposals)
+      .where(eq(instructionImprovementProposals.id, id))
+      .limit(1);
+    return proposal ?? null;
+  }
+
+  async updateInstructionProposal(
+    id: string,
+    data: Partial<NewInstructionImprovementProposal>,
+  ): Promise<InstructionImprovementProposal | null> {
+    const [proposal] = await db
+      .update(instructionImprovementProposals)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(instructionImprovementProposals.id, id))
+      .returning();
+    return proposal ?? null;
+  }
+
   async releaseReadyTickets(goalId: string): Promise<number> {
     const goalTickets = await db
       .select({ id: tickets.id, status: tickets.status })
@@ -78,7 +188,9 @@ export class GoalsRepository {
         .map((ticket) => ticket.id),
     );
     const candidateIds = goalTickets
-      .filter((ticket) => ticket.status === "backlog" || ticket.status === "blocked")
+      .filter(
+        (ticket) => ticket.status === "backlog" || ticket.status === "blocked",
+      )
       .map((ticket) => ticket.id);
 
     let released = 0;
@@ -101,10 +213,7 @@ export class GoalsRepository {
   }
 
   async delete(id: string): Promise<Goal | null> {
-    const [goal] = await db
-      .delete(goals)
-      .where(eq(goals.id, id))
-      .returning();
+    const [goal] = await db.delete(goals).where(eq(goals.id, id)).returning();
     return goal ?? null;
   }
 }

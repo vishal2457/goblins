@@ -1,4 +1,4 @@
-import { type Goal, type Project } from "@goblins/shared-constants";
+import { type Goal, type Project } from "goblins-shared-constants";
 import { FolderOpen, Info, Target } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Label } from "../../../components/ui/label";

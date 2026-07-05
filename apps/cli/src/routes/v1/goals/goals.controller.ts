@@ -14,7 +14,10 @@ export class GoalsController {
   });
 
   findAll = asyncHandler(async (req: Request, res: Response) => {
-    const { page, limit } = req.query as unknown as { page: number; limit: number };
+    const { page, limit } = req.query as unknown as {
+      page: number;
+      limit: number;
+    };
     const result = await this.service.findAll(page, limit);
     success(res, result, "Goals retrieved successfully");
   });
@@ -27,6 +30,11 @@ export class GoalsController {
   goalTicketsSnapshot = asyncHandler(async (req: Request, res: Response) => {
     const snapshot = await this.service.goalTicketsSnapshot(req.params.id!);
     success(res, snapshot, "Goal tickets snapshot retrieved successfully");
+  });
+
+  goalOverview = asyncHandler(async (req: Request, res: Response) => {
+    const overview = await this.service.goalOverview(req.params.id!);
+    success(res, overview, "Goal overview retrieved successfully");
   });
 
   update = asyncHandler(async (req: Request, res: Response) => {
@@ -54,6 +62,44 @@ export class GoalsController {
       userPoints: req.body.userPoints,
     });
     success(res, goal, "Goal retrospective started");
+  });
+
+  analyseRetrospective = asyncHandler(async (req: Request, res: Response) => {
+    const result = await this.service.analyseRetrospective(req.params.id!, {
+      userPoints: req.body.userPoints,
+    });
+    success(res, result, "Goal retrospective analysed");
+  });
+
+  listImprovements = asyncHandler(async (req: Request, res: Response) => {
+    const result = await this.service.listImprovements(req.params.id!);
+    success(res, result, "Goal improvements retrieved successfully");
+  });
+
+  approveImprovement = asyncHandler(async (req: Request, res: Response) => {
+    const proposal = await this.service.approveImprovement(
+      req.params.id!,
+      req.params.proposalId!,
+      { proposedInstructions: req.body.proposedInstructions },
+    );
+    success(res, proposal, "Instruction improvement approved");
+  });
+
+  rejectImprovement = asyncHandler(async (req: Request, res: Response) => {
+    const proposal = await this.service.rejectImprovement(
+      req.params.id!,
+      req.params.proposalId!,
+      { reason: req.body.reason },
+    );
+    success(res, proposal, "Instruction improvement rejected");
+  });
+
+  applyImprovement = asyncHandler(async (req: Request, res: Response) => {
+    const proposal = await this.service.applyImprovement(
+      req.params.id!,
+      req.params.proposalId!,
+    );
+    success(res, proposal, "Instruction improvement applied");
   });
 
   completeRetrospective = asyncHandler(async (req: Request, res: Response) => {

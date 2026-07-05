@@ -15,4 +15,4 @@ export type {
   TicketStatus,
   TicketStepExecution,
   TicketType,
-} from "@goblins/shared-constants";
+} from "goblins-shared-constants";

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { type Ticket } from "@goblins/shared-constants";
+import { type Ticket } from "goblins-shared-constants";
 import { TicketDetailsDialog } from "../../components/TicketDetailsDialog";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";

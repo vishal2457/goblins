@@ -9,7 +9,7 @@ import type {
   DiscoveredAgentMode,
   DiscoveredAgentProvider,
   DiscoveredAgentsResponse,
-} from "@goblins/shared-constants";
+} from "goblins-shared-constants";
 
 const PROVIDERS: DiscoveredAgentProvider[] = [
   "codex",

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { RealtimeEvent, Ticket } from "@goblins/shared-constants";
+import type { RealtimeEvent, Ticket } from "goblins-shared-constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../../../components/ui/toaster";
 import { queryKeys } from "../../query-keys";

@@ -70,7 +70,11 @@ export type TicketSubagentStatus =
 export type StepColor = "slate" | "blue" | "amber" | "green" | "red";
 export type BoardStepId = "todo" | "inprogress" | "done" | "failed";
 
-export type DiscoveredAgentProvider = "codex" | "claude" | "cursor" | "opencode";
+export type DiscoveredAgentProvider =
+  | "codex"
+  | "claude"
+  | "cursor"
+  | "opencode";
 export type DiscoveredAgentScope = "project" | "user";
 export type DiscoveredAgentMode = "primary" | "subagent" | "all" | "unknown";
 export type DiscoveredAgentSourceKind =
@@ -150,6 +154,21 @@ export interface DiscoveredAgentsResponse {
       errors: string[];
     }
   >;
+}
+
+export interface WorkflowPreset {
+  id: string;
+  name: string;
+  description: string;
+  teamType: "software" | "marketing" | "leadership" | "general";
+  content: string;
+}
+
+export interface WorkflowDocument {
+  content: string;
+  sourcePath: string;
+  isCustomized: boolean;
+  presets: WorkflowPreset[];
 }
 
 export interface Goal {
@@ -246,6 +265,108 @@ export interface TicketComment {
   authorName?: string | null;
   kind: TicketCommentKind;
   createdAt: string;
+}
+
+export type ImprovementTargetType =
+  | "workflow_instruction"
+  | "subagent_instruction";
+
+export type ImprovementStatus =
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "applied";
+
+export type RetrospectiveObservationKind =
+  | "planning_gap"
+  | "workflow_gap"
+  | "subagent_gap"
+  | "verification_gap"
+  | "handoff_gap"
+  | "tooling_gap";
+
+export interface EvidenceReference {
+  type: string;
+  id?: string;
+  summary: string;
+}
+
+export interface GoalRetrospective {
+  id: string;
+  goalId: string;
+  userPoints?: string | null;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetrospectiveObservation {
+  id: string;
+  retrospectiveId: string;
+  goalId: string;
+  kind: RetrospectiveObservationKind;
+  summary: string;
+  evidence: EvidenceReference[];
+  position: number;
+  createdAt: string;
+}
+
+export interface InstructionImprovementProposal {
+  id: string;
+  goalId: string;
+  retrospectiveId: string;
+  targetType: ImprovementTargetType;
+  targetId: string;
+  targetLabel: string;
+  proposedInstructions: string;
+  rationale: string;
+  evidence: EvidenceReference[];
+  status: ImprovementStatus;
+  beforeSnapshot?: string | null;
+  afterSnapshot?: string | null;
+  approvedAt?: string | null;
+  appliedAt?: string | null;
+  rejectedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalOverviewTicket extends Ticket {
+  commentCount: number;
+  importantComments: TicketComment[];
+  signals: string[];
+}
+
+export interface GoalOverview {
+  goal: Goal;
+  tickets: GoalOverviewTicket[];
+  ticketStatusCounts: Record<string, number>;
+  ticketTypeCounts: Record<string, number>;
+  subagentCounts: Record<string, number>;
+  failurePoints: Array<{
+    ticketId: string;
+    title: string;
+    status: TicketStatus;
+    retryCount: number;
+    assignedSubagentName?: string | null;
+    signals: string[];
+  }>;
+  importantComments: TicketComment[];
+  auditSummary: {
+    total: number;
+    actionCounts: Record<string, number>;
+    recent: AuditLog[];
+  };
+  verification: {
+    ticketsMissingEvidence: string[];
+    evidenceCommentCount: number;
+  };
+}
+
+export interface GoalImprovementList {
+  retrospectives: GoalRetrospective[];
+  observations: RetrospectiveObservation[];
+  proposals: InstructionImprovementProposal[];
 }
 
 export type RealtimeEventType =

@@ -29,6 +29,13 @@
       "when": 1782751352000,
       "tag": "0003_project_core_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782751353000,
+      "tag": "0004_instruction_improvements",
+      "breakpoints": true
     }
   ]
 }

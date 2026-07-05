@@ -14,6 +14,16 @@ export const apiPaths = {
   goalById: (id: string) => `${API_V1_PREFIX}/goals/${id}`,
   goalTicketsSnapshot: (id: string) =>
     `${API_V1_PREFIX}/goals/${id}/goal-tickets-snapshot`,
+  goalOverview: (id: string) => `${API_V1_PREFIX}/goals/${id}/overview`,
+  goalImprovements: (id: string) => `${API_V1_PREFIX}/goals/${id}/improvements`,
+  goalRetrospectiveAnalyse: (id: string) =>
+    `${API_V1_PREFIX}/goals/${id}/retrospective/analyse`,
+  goalImprovementApprove: (id: string, proposalId: string) =>
+    `${API_V1_PREFIX}/goals/${id}/improvements/${proposalId}/approve`,
+  goalImprovementReject: (id: string, proposalId: string) =>
+    `${API_V1_PREFIX}/goals/${id}/improvements/${proposalId}/reject`,
+  goalImprovementApply: (id: string, proposalId: string) =>
+    `${API_V1_PREFIX}/goals/${id}/improvements/${proposalId}/apply`,
   goalPlanningStart: (id: string) =>
     `${API_V1_PREFIX}/goals/${id}/planning/start`,
   goalPlanningComplete: (id: string) =>

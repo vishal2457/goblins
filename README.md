@@ -26,10 +26,10 @@ This is a pnpm + Turborepo monorepo.
 ```
 .
 ├── apps/
-│   ├── cli/        # @goblins/goblins-cli — Express API, Drizzle ORM, daemon binary
+│   ├── cli/        # goblins-cli — Express API, Drizzle ORM, daemon binary
 │   └── web/        # goblins-fe — Vite + React + Tailwind UI (Agent Workbench)
 └── packages/
-    ├── shared-constants/  # @goblins/shared-constants — types, API paths, board step config
+    ├── shared-constants/  # goblins-shared-constants — types, API paths, board step config
     ├── mcp-server/        # @goblins/mcp-server — Model Context Protocol tool server
     ├── skills/            # @goblins/skills — system skills shipped with Goblins
     ├── eslint-config/     # shared ESLint preset
@@ -61,9 +61,9 @@ pnpm build:cli
 
 This runs, in order:
 
-1. `@goblins/shared-constants` build
+1. `goblins-shared-constants` build
 2. `goblins-fe` (web) build
-3. `@goblins/goblins-cli` build, with web assets copied into `dist/public`
+3. `goblins-cli` build, with web assets copied into `dist/public`
 
 ### Run the daemon
 
@@ -86,7 +86,7 @@ Starts a detached server on `http://127.0.0.1:3090` and serves the Agent Workben
 In one terminal, run the API:
 
 ```sh
-pnpm --filter @goblins/goblins-cli dev
+pnpm --filter goblins-cli dev
 ```
 
 In another, run the web UI against it:
@@ -101,7 +101,7 @@ The web app expects the API at `VITE_AGENT_SERVER_URL` (defaults to the same ori
 
 ## Apps
 
-### `apps/cli` — `@goblins/goblins-cli`
+### `apps/cli` — `goblins-cli`
 
 Express + Drizzle service and the `goblins` CLI. Routes are organized by feature under `src/routes/v1/`:
 
@@ -132,7 +132,7 @@ GOBLINS_API_BASE_URL=http://localhost:3090 \
   pnpm --filter @goblins/mcp-server dev
 ```
 
-### `packages/shared-constants` — `@goblins/shared-constants`
+### `packages/shared-constants` — `goblins-shared-constants`
 
 Single source of truth for shared TypeScript types, API path constants, board step definitions, and ticket/goal enums. Both the CLI and web app consume it as a workspace package.
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Goal, Project } from "@goblins/shared-constants";
+import type { Goal, Project } from "goblins-shared-constants";
 
 function readSearchParam(key: string): string | null {
   if (typeof window === "undefined") return null;

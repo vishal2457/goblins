@@ -1,4 +1,4 @@
-import { type Goal } from "@goblins/shared-constants";
+import { type Goal } from "goblins-shared-constants";
 import { XCircle } from "lucide-react";
 
 type GoalErrorState =

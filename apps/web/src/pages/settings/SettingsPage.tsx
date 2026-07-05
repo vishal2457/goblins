@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { type Project } from "@goblins/shared-constants";
+import { type Project } from "goblins-shared-constants";
 import { Button } from "../../components/ui/button";
 import {
   Dialog,
@@ -19,31 +19,39 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { useDashboardSelection } from "../../hooks/useDashboardSelection";
-import {
-  useDashboardQuery,
-} from "../../shared/api/features/dashboard/dashboard.queries";
+import { useDashboardQuery } from "../../shared/api/features/dashboard/dashboard.queries";
 import {
   useCreateProjectMutation,
   useProjectAgentsQuery,
   useUpdateProjectAgentInstructionsMutation,
   useUpdateProjectMutation,
 } from "../../shared/api/features/project/project.queries";
-import { Bot, Folder, Loader2, Settings as SettingsIcon } from "lucide-react";
+import {
+  Bot,
+  Folder,
+  Loader2,
+  Settings as SettingsIcon,
+  Workflow,
+} from "lucide-react";
 import { ProjectsTab } from "./components/ProjectsTab";
 import { SubagentsTab } from "./components/SubagentsTab";
+import { WorkflowTab } from "./components/WorkflowTab";
+import {
+  useApplyWorkflowPresetMutation,
+  useResetWorkflowMutation,
+  useUpdateWorkflowMutation,
+  useWorkflowQuery,
+} from "../../shared/api/features/workflow/workflow.queries";
 
-const VALID_TABS = ["projects", "subagents"] as const;
+const VALID_TABS = ["projects", "subagents", "workflow"] as const;
 type SettingsTab = (typeof VALID_TABS)[number];
 
 export function SettingsPage() {
   const dashboardQuery = useDashboardQuery();
   const projects = dashboardQuery.data?.projects || [];
   const goals = dashboardQuery.data?.goals || [];
-  const {
-    selectedProjectId,
-    setSelectedProjectId,
-    setSelectedGoalId,
-  } = useDashboardSelection(projects, goals);
+  const { selectedProjectId, setSelectedProjectId, setSelectedGoalId } =
+    useDashboardSelection(projects, goals);
   const createProjectMutation = useCreateProjectMutation();
   const updateProjectMutation = useUpdateProjectMutation();
   const navigate = useNavigate();
@@ -58,6 +66,10 @@ export function SettingsPage() {
   );
   const updateProjectAgentInstructionsMutation =
     useUpdateProjectAgentInstructionsMutation(selectedProjectId);
+  const workflowQuery = useWorkflowQuery();
+  const updateWorkflowMutation = useUpdateWorkflowMutation();
+  const resetWorkflowMutation = useResetWorkflowMutation();
+  const applyWorkflowPresetMutation = useApplyWorkflowPresetMutation();
 
   const goToTab = (nextTab: SettingsTab) => {
     navigate(`/settings/${nextTab}`, { replace: true });
@@ -104,11 +116,7 @@ export function SettingsPage() {
         selectProject(project.id);
       }
 
-      if (
-        dialog === "editProject" &&
-        editingProjectId &&
-        location.trim()
-      ) {
+      if (dialog === "editProject" && editingProjectId && location.trim()) {
         await updateProjectMutation.mutateAsync({
           id: editingProjectId,
           data: {
@@ -136,17 +144,22 @@ export function SettingsPage() {
   const tabs = [
     ["projects", "Projects & Goals", Folder],
     ["subagents", "Team", Bot],
+    ["workflow", "Workflow", Workflow],
   ] as const;
-  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const selectedProject = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
   const selectedProjectGoals = selectedProject
     ? goals.filter((goal) => goal.projectId === selectedProject.id)
     : [];
   const errorMessage =
     activeTab === "subagents" && projectAgentsQuery.error instanceof Error
       ? projectAgentsQuery.error.message
-      : dashboardQuery.error instanceof Error
-        ? dashboardQuery.error.message
-        : null;
+      : activeTab === "workflow" && workflowQuery.error instanceof Error
+        ? workflowQuery.error.message
+        : dashboardQuery.error instanceof Error
+          ? dashboardQuery.error.message
+          : null;
 
   return (
     <div className="flex h-full overflow-hidden bg-background text-foreground">
@@ -234,6 +247,25 @@ export function SettingsPage() {
               }
             />
           )}
+
+          {activeTab === "workflow" && (
+            <WorkflowTab
+              workflow={workflowQuery.data}
+              isLoading={workflowQuery.isLoading}
+              saveWorkflow={(content) =>
+                updateWorkflowMutation.mutateAsync({ content })
+              }
+              resetWorkflow={() => resetWorkflowMutation.mutateAsync()}
+              applyPreset={(presetId) =>
+                applyWorkflowPresetMutation.mutateAsync(presetId)
+              }
+              isSaving={
+                updateWorkflowMutation.isPending ||
+                resetWorkflowMutation.isPending ||
+                applyWorkflowPresetMutation.isPending
+              }
+            />
+          )}
         </div>
       </main>
 
@@ -244,9 +276,7 @@ export function SettingsPage() {
         <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="px-4 pt-4 pr-12">
             <DialogTitle>
-              {dialog === "project"
-                ? "New Project"
-                : "Edit Project"}
+              {dialog === "project" ? "New Project" : "Edit Project"}
             </DialogTitle>
           </DialogHeader>
           <div className="theme-scrollbar min-h-0 space-y-4 overflow-y-auto px-4 py-3">
@@ -282,8 +312,7 @@ export function SettingsPage() {
                 !name.trim() ||
                 (dialog === "project" && !location.trim()) ||
                 (dialog === "editProject" &&
-                  (!editingProjectId ||
-                    !location.trim()))
+                  (!editingProjectId || !location.trim()))
               }
             >
               {dialog === "editProject" ? "Save changes" : "Create"}

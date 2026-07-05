@@ -1,4 +1,4 @@
-import type { Goal, Project } from "@goblins/shared-constants";
+import type { Goal, Project } from "goblins-shared-constants";
 import { Edit3, Plus } from "lucide-react";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";

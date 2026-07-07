@@ -27,11 +27,12 @@ function usage(): never {
   console.log(`Goblins CLI
 
 Usage:
-  goblins init [--port <port>] [--host <host>]
   goblins start [--port <port>] [--host <host>]
+  goblins kill
   goblins stop
   goblins restart [--port <port>] [--host <host>]
   goblins status
+  goblins help
 
 Options:
   --port <port>  Server port. Defaults to ${DEFAULT_PORT}.
@@ -41,7 +42,13 @@ Options:
 }
 
 function parseOptions(argv: string[]): { command: string; port: number; host: string } {
-  const [command = "init", ...rest] = argv;
+  if (argv.length === 0) usage();
+
+  const command = argv[0]!;
+  const rest = argv.slice(1);
+  if (command === "help" || command === "--help" || command === "-h") usage();
+  if (command.startsWith("-")) usage();
+
   const options = { command, port: DEFAULT_PORT, host: DEFAULT_HOST };
 
   for (let i = 0; i < rest.length; i += 1) {
@@ -89,6 +96,8 @@ function removeState(): void {
 }
 
 function isRunning(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+
   try {
     process.kill(pid, 0);
     return true;
@@ -191,6 +200,29 @@ async function stop(): Promise<void> {
   console.log("Goblins stopped");
 }
 
+async function kill(): Promise<void> {
+  const state = readState();
+  if (!state) {
+    console.log("Goblins is not running");
+    return;
+  }
+
+  if (isRunning(state.pid)) {
+    process.kill(state.pid, "SIGTERM");
+    const started = Date.now();
+    while (Date.now() - started < 3_000 && isRunning(state.pid)) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    if (isRunning(state.pid)) {
+      process.kill(state.pid, "SIGKILL");
+    }
+  }
+
+  removeState();
+  console.log("Goblins killed");
+}
+
 function status(): void {
   const state = readState();
   if (!state || !isRunning(state.pid)) {
@@ -206,9 +238,11 @@ async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
 
   switch (options.command) {
-    case "init":
     case "start":
       await start(options);
+      return;
+    case "kill":
+      await kill();
       return;
     case "stop":
       await stop();
@@ -219,11 +253,6 @@ async function main(): Promise<void> {
       return;
     case "status":
       status();
-      return;
-    case "help":
-    case "--help":
-    case "-h":
-      usage();
       return;
     default:
       throw new Error(`Unknown command: ${options.command}`);

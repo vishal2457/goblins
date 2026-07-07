@@ -15,7 +15,7 @@ Goblins is a multi-platform system for orchestrating AI coding agents on your lo
 - **Realtime dashboard** — Socket.IO-powered event stream keeps the UI in sync with the runtime.
 - **Embedded database** — ships with PGlite + Drizzle, no external Postgres required.
 - **MCP server** — exposes Goblins APIs as Model Context Protocol tools for external agents.
-- **Daemon CLI** — `goblins init | start | stop | status | restart` manages the local server on port `3090`.
+- **Daemon CLI** — `goblins start | kill | stop | status | restart | help` manages the local server on port `3090`.
 
 ---
 
@@ -68,18 +68,20 @@ This runs, in order:
 ### Run the daemon
 
 ```sh
-goblins init
+goblins start
 ```
 
 Starts a detached server on `http://127.0.0.1:3090` and serves the Agent Workbench from the same origin. State lives in `~/.goblins`.
+Running `goblins` without a command prints help instead of starting the server.
 
 | Command | Description |
 | --- | --- |
-| `goblins init [--port <p>] [--host <h>]` | Start the daemon (idempotent) |
-| `goblins start` | Start the daemon |
-| `goblins stop` | Stop the daemon |
+| `goblins start [--port <p>] [--host <h>]` | Start the daemon (idempotent) |
+| `goblins kill` | Kill the daemon |
+| `goblins stop` | Stop the daemon gracefully |
 | `goblins restart` | Restart the daemon |
 | `goblins status` | Print daemon state |
+| `goblins help` | Print CLI help |
 
 ### Run from source (dev)
 

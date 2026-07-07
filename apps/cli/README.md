@@ -6,23 +6,26 @@ Build the distributable CLI package from the repository root:
 pnpm build:cli
 ```
 
-The package exposes a `goblins` binary. After install, initialize the local
-app server with:
+The package exposes a `goblins` binary. After install, start the local app
+server with:
 
 ```sh
-goblins init
+goblins start
 ```
 
-`goblins init` starts a detached daemon on `http://127.0.0.1:3090`, serves the
+`goblins start` starts a detached daemon on `http://127.0.0.1:3090`, serves the
 built web UI from the same origin, and stores daemon state in `~/.goblins`.
+Running `goblins` without a command prints help instead of starting the server.
 
 Useful commands:
 
 ```sh
-goblins init --port 3199
+goblins start --port 3199
 goblins status
+goblins kill
 goblins stop
 goblins restart
+goblins help
 ```
 
 The CLI package includes the compiled API, Drizzle migrations, and the built web

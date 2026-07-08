@@ -1,20 +1,12 @@
 import type { DiscoveredAgent, Project } from "goblins-shared-constants";
-import {
-  Brain,
-  ChevronDown,
-  Cpu,
-  Edit3,
-  Loader2,
-  RefreshCw,
-  Save,
-} from "lucide-react";
-import { useState } from "react";
-import { Badge } from "../../../components/ui/badge";
+import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "../../../components/ui/button";
-import { Label } from "../../../components/ui/label";
+import { SubagentCard } from "./SubagentCard";
+import { SubagentDetailPage } from "./SubagentDetailPage";
 
 type SubagentsTabProps = {
   selectedProject: Project | undefined;
+  selectedAgentId: string | null;
   discoveredAgentsLoading: boolean;
   discoveredAgents:
     | {
@@ -26,6 +18,8 @@ type SubagentsTabProps = {
   agentInstructions: string;
   setEditingAgentId: (value: string | null) => void;
   setAgentInstructions: (value: string) => void;
+  onOpenAgent: (agentId: string) => void;
+  onBackToAgents: () => void;
   refreshDiscoveredAgents: () => Promise<unknown>;
   updateDiscoveredAgentInstructions: (
     agentId: string,
@@ -35,21 +29,61 @@ type SubagentsTabProps = {
 
 export function SubagentsTab({
   selectedProject,
+  selectedAgentId,
   discoveredAgentsLoading,
   discoveredAgents,
   editingAgentId,
   agentInstructions,
   setEditingAgentId,
   setAgentInstructions,
+  onOpenAgent,
+  onBackToAgents,
   refreshDiscoveredAgents,
   updateDiscoveredAgentInstructions,
 }: SubagentsTabProps) {
+  const agents = discoveredAgents?.agents ?? [];
+  const selectedAgent = selectedAgentId
+    ? agents.find((agent) => agent.id === selectedAgentId)
+    : undefined;
+
+  if (selectedAgentId && selectedProject && !discoveredAgentsLoading) {
+    return (
+      <SubagentDetailPage
+        agent={selectedAgent}
+        isEditing={editingAgentId === selectedAgentId}
+        instructions={agentInstructions}
+        onBack={onBackToAgents}
+        onEdit={() => {
+          if (!selectedAgent) return;
+          setEditingAgentId(selectedAgent.id);
+          setAgentInstructions(selectedAgent.instructions || "");
+        }}
+        onInstructionsChange={setAgentInstructions}
+        onCancel={() => {
+          setEditingAgentId(null);
+          setAgentInstructions("");
+        }}
+        onSave={async () => {
+          if (!selectedAgent) return;
+          const updated = await updateDiscoveredAgentInstructions(
+            selectedAgent.id,
+            agentInstructions,
+          );
+          if (updated) {
+            setEditingAgentId(null);
+            setAgentInstructions("");
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Heading
-          title="Team"
-          description="Detected file-based team members for the selected project and user configuration."
+          title="AI Agents"
+          description="Detected file-based agents for the selected project and user configuration."
         />
         <Button
           variant="outline"
@@ -72,33 +106,13 @@ export function SubagentsTab({
           <Loader2 className="h-4 w-4 animate-spin" />
           Scanning team configuration.
         </div>
-      ) : discoveredAgents && discoveredAgents.agents.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          {discoveredAgents.agents.map((agent) => (
-            <SubagentRow
+      ) : agents.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {agents.map((agent) => (
+            <SubagentCard
               key={agent.id}
               agent={agent}
-              isEditing={editingAgentId === agent.id}
-              instructions={agentInstructions}
-              onEdit={() => {
-                setEditingAgentId(agent.id);
-                setAgentInstructions(agent.instructions || "");
-              }}
-              onInstructionsChange={setAgentInstructions}
-              onCancel={() => {
-                setEditingAgentId(null);
-                setAgentInstructions("");
-              }}
-              onSave={async () => {
-                const updated = await updateDiscoveredAgentInstructions(
-                  agent.id,
-                  agentInstructions,
-                );
-                if (updated) {
-                  setEditingAgentId(null);
-                  setAgentInstructions("");
-                }
-              }}
+              onOpen={() => onOpenAgent(agent.id)}
             />
           ))}
         </div>
@@ -128,173 +142,6 @@ function Empty({ text }: { text: string }) {
   return (
     <div className="rounded-lg border border-dashed px-4 py-14 text-center text-sm text-muted-foreground">
       <div>{text}</div>
-    </div>
-  );
-}
-
-function SubagentRow({
-  agent,
-  isEditing,
-  instructions,
-  onEdit,
-  onInstructionsChange,
-  onCancel,
-  onSave,
-}: {
-  agent: DiscoveredAgent;
-  isEditing: boolean;
-  instructions: string;
-  onEdit: () => void;
-  onInstructionsChange: (value: string) => void;
-  onCancel: () => void;
-  onSave: () => void | Promise<void>;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const modelLabel = agent.model?.trim() || "Not specified";
-  const reasoningLabel = getAgentReasoning(agent);
-
-  return (
-    <div className="border-b last:border-b-0">
-      <button
-        type="button"
-        className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
-        onClick={() => setIsOpen((value) => !value)}
-      >
-        <ChevronDown
-          className={`mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
-        />
-        <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="font-semibold leading-5">{agent.displayName}</div>
-            {agent.description && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {agent.description}
-              </p>
-            )}
-          </div>
-          <BadgeGroup>
-            {agent.shadowedBy && (
-              <GroupedBadge variant="outline">Shadowed</GroupedBadge>
-            )}
-            {!agent.validation.valid && (
-              <GroupedBadge variant="destructive">Invalid</GroupedBadge>
-            )}
-            <GroupedBadge variant="outline" className="capitalize">
-              {agent.scope}
-            </GroupedBadge>
-            {agent.model && (
-              <GroupedBadge variant="outline">
-                <Cpu className="mr-1 h-3 w-3" />
-                Model: {modelLabel}
-              </GroupedBadge>
-            )}
-            {reasoningLabel && (
-              <GroupedBadge variant="outline">
-                <Brain className="mr-1 h-3 w-3" />
-                Reasoning: {reasoningLabel}
-              </GroupedBadge>
-            )}
-          </BadgeGroup>
-        </div>
-      </button>
-
-      {isOpen && (
-        <div className="border-t bg-muted/10 px-4 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="grid gap-2 text-sm sm:grid-cols-3">
-              <ModelDetail label="Model" value={modelLabel} />
-              <ModelDetail
-                label="Reasoning"
-                value={reasoningLabel || "Not specified"}
-              />
-              <ModelDetail label="Provider" value={agent.provider} />
-            </div>
-            {!isEditing && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onEdit}
-                disabled={!agent.sourcePath}
-              >
-                <Edit3 className="mr-2 h-3.5 w-3.5" />
-                Edit
-              </Button>
-            )}
-          </div>
-
-          {isEditing ? (
-            <div className="mt-3 space-y-3">
-              <textarea
-                value={instructions}
-                onChange={(event) => onInstructionsChange(event.target.value)}
-                className="min-h-48 w-full resize-y rounded-md border bg-background p-3 font-mono text-xs"
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={onCancel}>
-                  Cancel
-                </Button>
-                <Button onClick={onSave} disabled={!instructions.trim()}>
-                  <Save className="mr-2 h-3.5 w-3.5" />
-                  Save
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3 rounded-md border bg-background/70 p-3">
-              <Label className="text-xs text-muted-foreground">
-                Instructions
-              </Label>
-              <pre className="theme-scrollbar mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/20 p-3 font-mono text-xs">
-                {agent.instructions || "No instructions detected."}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BadgeGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex shrink-0 flex-wrap justify-end gap-y-1 overflow-hidden rounded-4xl [&>*:first-child]:rounded-l-4xl [&>*:last-child]:rounded-r-4xl [&>*:not(:first-child)]:-ml-px [&>*:not(:first-child)]:rounded-l-none [&>*:not(:last-child)]:rounded-r-none">
-      {children}
-    </div>
-  );
-}
-
-function GroupedBadge(props: React.ComponentProps<typeof Badge>) {
-  return <Badge {...props} />;
-}
-
-function getAgentReasoning(agent: DiscoveredAgent): string | undefined {
-  return firstStringValue(
-    agent.metadata.reasoning,
-    agent.metadata.reasoningEffort,
-    agent.metadata.reasoning_effort,
-    agent.metadata.reasoningBudget,
-    agent.metadata.reasoning_budget,
-  );
-}
-
-function firstStringValue(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function ModelDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-40">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="mt-1 break-words font-mono text-xs text-foreground">
-        {value}
-      </div>
     </div>
   );
 }

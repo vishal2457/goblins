@@ -1,6 +1,6 @@
 {
   "name": "goblins-cli",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Goblins local server and web UI CLI",
   "bin": {
     "goblins": "./dist/bin/goblins.js"

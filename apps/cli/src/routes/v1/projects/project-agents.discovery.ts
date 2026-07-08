@@ -216,18 +216,13 @@ async function scanTomlProvider(
       const parsed = TOML.parse(content);
       if (!isRecord(parsed)) continue;
       const name = stringValue(parsed.name) || fileNameWithoutExt(file);
-      const instructions =
-        stringValue(parsed.developer_instructions) ||
-        stringValue(parsed.instructions) ||
-        stringValue(parsed.system_prompt) ||
-        stringValue(parsed.prompt);
       agents.push(
         buildAgent({
           provider,
           name,
           displayName: stringValue(parsed.display_name) || stringValue(parsed.title) || name,
           description: stringValue(parsed.description),
-          instructions,
+          instructions: content,
           model: stringValue(parsed.model),
           mode: normalizeMode(parsed.mode ?? parsed.type ?? "subagent"),
           scope: item.scope,
@@ -333,21 +328,12 @@ function replaceInstructions(
   sourceKind: DiscoveredAgent["sourceKind"],
 ): string {
   if (sourceKind === "toml") {
-    return replaceTomlInstructions(content, instructions);
+    return `${instructions.trim()}\n`;
   }
   if (!content.startsWith("---")) return `${instructions.trim()}\n`;
   const end = content.indexOf("\n---", 3);
   if (end === -1) return `${instructions.trim()}\n`;
   return `${content.slice(0, end + 4).trimEnd()}\n\n${instructions.trim()}\n`;
-}
-
-function replaceTomlInstructions(content: string, instructions: string): string {
-  const nextValue = `developer_instructions = \"\"\"\n${instructions.trim().replace(/"""/g, '\\"\\"\\"')}\n\"\"\"`;
-  const existing = /developer_instructions\s*=\s*"""[\s\S]*?"""/m;
-  if (existing.test(content)) {
-    return content.replace(existing, nextValue);
-  }
-  return `${content.trimEnd()}\n\n${nextValue}\n`;
 }
 
 function buildAgent(input: {

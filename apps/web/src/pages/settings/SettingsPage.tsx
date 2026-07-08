@@ -55,7 +55,7 @@ export function SettingsPage() {
   const createProjectMutation = useCreateProjectMutation();
   const updateProjectMutation = useUpdateProjectMutation();
   const navigate = useNavigate();
-  const { tab } = useParams<{ tab?: string }>();
+  const { tab, agentId } = useParams<{ tab?: string; agentId?: string }>();
   const activeTab: SettingsTab =
     tab && VALID_TABS.includes(tab as SettingsTab)
       ? (tab as SettingsTab)
@@ -74,6 +74,7 @@ export function SettingsPage() {
   const goToTab = (nextTab: SettingsTab) => {
     navigate(`/settings/${nextTab}`, { replace: true });
   };
+  const selectedAgentId = agentId ? decodeURIComponent(agentId) : null;
   const [dialog, setDialog] = useState<null | "project" | "editProject">(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -230,6 +231,7 @@ export function SettingsPage() {
           {activeTab === "subagents" && (
             <SubagentsTab
               selectedProject={selectedProject}
+              selectedAgentId={selectedAgentId}
               discoveredAgentsLoading={
                 projectAgentsQuery.isLoading || projectAgentsQuery.isFetching
               }
@@ -238,6 +240,10 @@ export function SettingsPage() {
               agentInstructions={agentInstructions}
               setEditingAgentId={setEditingAgentId}
               setAgentInstructions={setAgentInstructions}
+              onOpenAgent={(nextAgentId) =>
+                navigate(`/settings/subagents/${encodeURIComponent(nextAgentId)}`)
+              }
+              onBackToAgents={() => navigate("/settings/subagents")}
               refreshDiscoveredAgents={() => projectAgentsQuery.refetch()}
               updateDiscoveredAgentInstructions={(agentId, instructions) =>
                 updateProjectAgentInstructionsMutation.mutateAsync({

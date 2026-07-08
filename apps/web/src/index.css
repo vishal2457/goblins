@@ -130,6 +130,18 @@
 }
 
 @layer utilities {
+  .goblin-title {
+    font-family: var(--font-sans);
+    font-size: 1.45rem;
+    font-weight: 760;
+    letter-spacing: 0;
+    line-height: 1.05;
+    color: transparent;
+    background: linear-gradient(135deg, oklch(0.94 0 0), oklch(0.72 0.14 151));
+    background-clip: text;
+    -webkit-background-clip: text;
+  }
+
   .theme-scrollbar,
   .theme-scrollbar * {
     scrollbar-gutter: stable;

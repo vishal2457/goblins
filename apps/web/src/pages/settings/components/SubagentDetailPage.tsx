@@ -3,6 +3,7 @@ import { ArrowLeft, Edit3, Save } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent } from "../../../components/ui/card";
 import { Label } from "../../../components/ui/label";
+import { cn } from "../../../lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
 
 type SubagentDetailPageProps = {
@@ -156,7 +157,10 @@ function InstructionsPanel({
           value={instructions}
           onChange={(event) => onInstructionsChange(event.target.value)}
           disabled={!isEditing}
-          className="h-full w-full resize-none rounded-md border bg-background p-3 font-mono text-xs disabled:opacity-100"
+          className={cn(
+            "h-full w-full resize-none rounded-md border bg-background p-3 font-mono text-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-100",
+            isEditing && "border-ring ring-3 ring-ring/50",
+          )}
         />
       </div>
     </div>

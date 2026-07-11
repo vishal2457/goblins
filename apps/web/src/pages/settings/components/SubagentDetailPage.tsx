@@ -190,7 +190,7 @@ function ActionRow({
       >
         <Button size="sm" variant="outline" onClick={onEdit} disabled={!canEdit}>
           <Edit3 className="mr-2 h-3.5 w-3.5" />
-          Edit
+          Edit Agent
         </Button>
       </div>
 

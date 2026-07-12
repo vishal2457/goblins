@@ -13,7 +13,7 @@ Goblins is a multi-platform system for orchestrating AI coding agents on your lo
 - **Projects, Goals, Tickets** — organize agent work into a kanban-style pipeline you can move forward from anywhere.
 - **Discovered subagents** — pick from local coding agents (Codex, Claude Code, opencode, Cursor) and bind them per project.
 - **Realtime dashboard** — Socket.IO-powered event stream keeps the UI in sync with the runtime.
-- **Embedded database** — ships with PGlite + Drizzle, no external Postgres required.
+- **Git-friendly file storage** — goals and tickets are Markdown files with YAML frontmatter under the project's `.goblins` directory.
 - **MCP server** — exposes Goblins APIs as Model Context Protocol tools for external agents.
 - **Daemon CLI** — `goblins start | kill | stop | status | restart | help` manages the local server on port `3090`.
 
@@ -26,7 +26,7 @@ This is a pnpm + Turborepo monorepo.
 ```
 .
 ├── apps/
-│   ├── cli/        # goblins-cli — Express API, Drizzle ORM, daemon binary
+│   ├── cli/        # goblins-cli — Express API, Markdown storage, daemon binary
 │   └── web/        # goblins-fe — Vite + React + Tailwind UI (Agent Workbench)
 └── packages/
     ├── shared-constants/  # goblins-shared-constants — types, API paths, board step config
@@ -71,7 +71,8 @@ This runs, in order:
 goblins start
 ```
 
-Starts a detached server on `http://127.0.0.1:3090` and serves the Agent Workbench from the same origin. State lives in `~/.goblins`.
+Starts one detached server on `http://127.0.0.1:3090` and serves the Agent Workbench from the same origin. The daemon-wide project registry lives at `~/.goblins/projects.json`; each registered project's goals and tickets live in `<project>/.goblins`.
+Projects can be registered from the Workbench with an absolute directory path or by an agent through the MCP `projects_add` tool. Starting Goblins from a project directory also registers that directory automatically.
 Running `goblins` without a command prints help instead of starting the server.
 
 | Command | Description |
@@ -105,15 +106,16 @@ The web app expects the API at `VITE_AGENT_SERVER_URL` (defaults to the same ori
 
 ### `apps/cli` — `goblins-cli`
 
-Express + Drizzle service and the `goblins` CLI. Routes are organized by feature under `src/routes/v1/`:
+Express service with Markdown/frontmatter persistence and the `goblins` CLI. Routes are organized by feature under `src/routes/v1/`:
 
-- `projects/` — projects, modules, and project agent discovery
+- `projects/` — project metadata, derived module views, and agent discovery
 - `goals/` — goals, phases, and execution
 - `tickets/` — tickets, comments, and step execution
 - `events/` — realtime event bus over Socket.IO
 - `steps/`, `modules/`, `audit/` — supporting surfaces
 
 The daemon is a detached child process whose state is persisted in `~/.goblins/daemon.json`.
+Modules are labels stored in ticket frontmatter; the modules API derives its results from tickets and does not create a modules directory.
 
 ### `apps/web` — `goblins-fe`
 
@@ -152,7 +154,6 @@ The CLI reads from the local `.env` and process environment. Useful variables:
 | --- | --- |
 | `HOST` / `PORT` | Bind address for the daemon (default `127.0.0.1:3090`) |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist |
-| `EMBEDDED_DATABASE_DIR` | PGlite data directory (default `.goblins/pglite`) |
 | `GOBLINS_CLI_DAEMON` | Set by the CLI to `1` when spawning the detached server |
 | `VITE_AGENT_SERVER_URL` | Web UI → API base URL (web app only) |
 | `GOBLINS_API_BASE_URL` / `GOBLINS_API_TOKEN` / `GOBLINS_API_KEY` | Consumed by the MCP server |

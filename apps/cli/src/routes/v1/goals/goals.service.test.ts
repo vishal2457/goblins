@@ -13,10 +13,6 @@ import type { TicketsRepository } from "../tickets/tickets.repo";
 import type { GoalsRepository } from "./goals.repo";
 import { GoalsService } from "./goals.service";
 
-vi.mock("../../../shared/db/index", () => ({
-  db: {},
-}));
-
 vi.mock("../projects/project-agents.discovery", () => ({
   discoverProjectAgents: vi.fn().mockResolvedValue({
     agents: [],

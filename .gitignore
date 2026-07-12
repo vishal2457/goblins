@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 .pnp
 .pnp.js
 
@@ -48,6 +49,6 @@ pids/
 *.seed
 *.pid.lock
 
-# Local embedded database
+# Local Goblins project data
 .goblins/
 apps/cli/.goblins/

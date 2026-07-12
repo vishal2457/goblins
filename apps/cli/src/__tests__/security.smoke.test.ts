@@ -2,17 +2,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Express } from "express";
 
-vi.mock("../shared/db", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([{ id: "1" }]),
-  },
-  checkDBConnection: vi.fn().mockResolvedValue(undefined),
-  closeDB: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock("../socket", () => ({
   initializeSocketServer: vi.fn(),
   closeSocketServer: vi.fn().mockResolvedValue(undefined),
@@ -43,7 +32,7 @@ describe("Production security headers & health", () => {
     expect(typeof res.body.uptime).toBe("number");
   });
 
-  it("GET /ready returns 200 when DB is reachable", async () => {
+  it("GET /ready returns 200 when file storage is available", async () => {
     const res = await request(app).get("/ready");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ready");

@@ -1,86 +1,28 @@
-import crypto from "node:crypto";
-import { and, asc, count, desc, eq, gte, lte, type SQL } from "drizzle-orm";
-import { db } from "../../../shared/db/index";
-import { auditLog, type AuditLogInsertType, type AuditLogType } from "../../../shared/db/schema/audit-log.schema";
-
-export type AuditLog = AuditLogType;
-export type CreateAuditLogData = Omit<AuditLogInsertType, "id" | "createdAt"> & { id?: string };
+import path from "node:path";
+import { auditRoot, id, markdownFiles, now, readMarkdown, removePath, writeMarkdown } from "../../../shared/file-store";
+export type AuditLog = { id: string; module: string; action: string; entityId: string | null; entityName: string; data: unknown; userId: string | null; userName: string | null; userEmail: string | null; ipAddress: string | null; userAgent: string | null; metadata: unknown; createdAt: Date };
+export type CreateAuditLogData = Omit<AuditLog, "id" | "createdAt" | "entityId" | "userId" | "userName" | "userEmail" | "ipAddress" | "userAgent"> & {
+  id?: string;
+  entityId?: string | null;
+  userId?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
 export type AuditSortField = "module" | "action" | "entityName" | "userName" | "createdAt";
 export type AuditSortDirection = "asc" | "desc";
-export type AuditFilters = {
-  module?: string;
-  action?: string;
-  entityId?: string;
-  entityName?: string;
-  userId?: string;
-  startDate?: string;
-  endDate?: string;
-  filters?: unknown;
-  page?: number;
-  limit?: number;
-  sortBy?: AuditSortField;
-  sortDirection?: AuditSortDirection;
-};
-export type AuditListResult = {
-  data: AuditLog[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
-};
-
-const sortColumns = {
-  module: auditLog.module,
-  action: auditLog.action,
-  entityName: auditLog.entityName,
-  userName: auditLog.userName,
-  createdAt: auditLog.createdAt,
-};
-
+export type AuditFilters = { module?: string; action?: string; entityId?: string; entityName?: string; userId?: string; startDate?: string; endDate?: string; filters?: unknown; page?: number; limit?: number; sortBy?: AuditSortField; sortDirection?: AuditSortDirection };
+export type AuditListResult = { data: AuditLog[]; pagination: { page: number; limit: number; total: number; totalPages: number } };
 export class AuditRepository {
-  async create(data: CreateAuditLogData): Promise<AuditLog> {
-    const [entry] = await db.insert(auditLog).values({ ...data, id: data.id ?? crypto.randomUUID() }).returning();
-    if (!entry) throw new Error("Failed to create audit log entry");
-    return entry;
-  }
-
-  async findById(id: string): Promise<AuditLog | null> {
-    const [entry] = await db.select().from(auditLog).where(eq(auditLog.id, id)).limit(1);
-    return entry ?? null;
-  }
-
-  async findAll(filters: AuditFilters = {}): Promise<AuditListResult> {
-    const page = filters.page ?? 1;
-    const limit = filters.limit ?? 25;
-    const conditions: SQL[] = [];
-    if (filters.module) conditions.push(eq(auditLog.module, filters.module));
-    if (filters.action) conditions.push(eq(auditLog.action, filters.action));
-    if (filters.entityId) conditions.push(eq(auditLog.entityId, filters.entityId));
-    if (filters.entityName) conditions.push(eq(auditLog.entityName, filters.entityName));
-    if (filters.userId) conditions.push(eq(auditLog.userId, filters.userId));
-    if (filters.startDate) conditions.push(gte(auditLog.createdAt, new Date(filters.startDate)));
-    if (filters.endDate) conditions.push(lte(auditLog.createdAt, new Date(filters.endDate)));
-    const where = conditions.length ? and(...conditions) : undefined;
-    const direction = filters.sortDirection === "asc" ? asc : desc;
-    const column = sortColumns[filters.sortBy ?? "createdAt"];
-    const [totalRow] = await db.select({ value: count() }).from(auditLog).where(where);
-    const data = await db.select().from(auditLog).where(where).orderBy(direction(column)).limit(limit).offset((page - 1) * limit);
-    const total = Number(totalRow?.value ?? 0);
-    return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
-  }
-
-  findByEntity(entityName: string, entityId: string): Promise<AuditLog[]> {
-    return db.select().from(auditLog).where(and(eq(auditLog.entityName, entityName), eq(auditLog.entityId, entityId))).orderBy(desc(auditLog.createdAt));
-  }
-
-  async getModuleStats(): Promise<{ module: string; count: number }[]> {
-    const rows = await db.select({ module: auditLog.module, value: count() }).from(auditLog).groupBy(auditLog.module);
-    return rows.map((row) => ({ module: row.module, count: Number(row.value) }));
-  }
-
-  async getActionStats(module?: string): Promise<{ action: string; count: number }[]> {
-    const rows = await db.select({ action: auditLog.action, value: count() }).from(auditLog).where(module ? eq(auditLog.module, module) : undefined).groupBy(auditLog.action);
-    return rows.map((row) => ({ action: row.action, count: Number(row.value) }));
-  }
-
-  async purgeOlderThan(date: Date): Promise<number> {
-    return (await db.delete(auditLog).where(lte(auditLog.createdAt, date)).returning({ id: auditLog.id })).length;
-  }
+  async create(data: CreateAuditLogData): Promise<AuditLog> { const entry: AuditLog = { ...data, id: data.id ?? id(), entityId: data.entityId ?? null, userId: data.userId ?? null, userName: data.userName ?? null, userEmail: data.userEmail ?? null, ipAddress: data.ipAddress ?? null, userAgent: data.userAgent ?? null, createdAt: now() }; await writeMarkdown(path.join(auditRoot(), `${entry.id}.md`), entry); return entry; }
+  async findById(idValue: string) { return (await readMarkdown<AuditLog>(path.join(auditRoot(), `${idValue}.md`)))?.data ?? null; }
+  async findAll(filters: AuditFilters = {}): Promise<AuditListResult> { const page = filters.page ?? 1, limit = filters.limit ?? 25; let all = await this.all(); all = all.filter((row) => (!filters.module || row.module === filters.module) && (!filters.action || row.action === filters.action) && (!filters.entityId || row.entityId === filters.entityId) && (!filters.entityName || row.entityName === filters.entityName) && (!filters.userId || row.userId === filters.userId) && (!filters.startDate || row.createdAt >= new Date(filters.startDate)) && (!filters.endDate || row.createdAt <= new Date(filters.endDate))); const field = filters.sortBy ?? "createdAt"; all.sort((a, b) => compare(a[field], b[field]) * (filters.sortDirection === "asc" ? 1 : -1)); return { data: all.slice((page - 1) * limit, page * limit), pagination: { page, limit, total: all.length, totalPages: Math.ceil(all.length / limit) } }; }
+  async findByEntity(entityName: string, entityId: string) { return (await this.all()).filter((row) => row.entityName === entityName && row.entityId === entityId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); }
+  async getModuleStats() { return counts(await this.all(), "module").map(([module, count]) => ({ module, count })); }
+  async getActionStats(module?: string) { return counts((await this.all()).filter((row) => !module || row.module === module), "action").map(([action, count]) => ({ action, count })); }
+  async purgeOlderThan(date: Date) { const old = (await this.all()).filter((row) => row.createdAt <= date); await Promise.all(old.map((row) => removePath(path.join(auditRoot(), `${row.id}.md`)))); return old.length; }
+  private async all() { const records = await Promise.all((await markdownFiles(auditRoot())).map((file) => readMarkdown<AuditLog>(file))); return records.flatMap((record) => record?.data ?? []); }
 }
+function compare(a: unknown, b: unknown) { const left = a instanceof Date ? a.getTime() : String(a ?? ""); const right = b instanceof Date ? b.getTime() : String(b ?? ""); return left < right ? -1 : left > right ? 1 : 0; }
+function counts(rows: AuditLog[], key: "module" | "action") { const map = new Map<string, number>(); for (const row of rows) map.set(row[key], (map.get(row[key]) ?? 0) + 1); return [...map.entries()]; }

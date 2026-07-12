@@ -1,14 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectModule } from "../../../shared/db/schema/projects";
-import { NotFoundError } from "../../../shared/utils/http-errors.util";
 import type { ProjectsRepository } from "../projects/projects.repo";
 import type { TicketsRepository } from "../tickets/tickets.repo";
 import type { ModulesRepository } from "./modules.repo";
 import { ModulesService } from "./modules.service";
-
-vi.mock("../../../shared/db/index", () => ({
-  db: {},
-}));
 
 const projectId = "21a759ff-944d-4336-a522-4e0b3c57172e";
 const moduleId = "1f33c48c-fdb1-4904-9b0d-97852f0d81f4";
@@ -24,7 +19,6 @@ const module = {
 
 describe("ModulesService", () => {
   const repository = {
-    create: vi.fn(),
     findByProject: vi.fn(),
     findById: vi.fn(),
   };
@@ -37,36 +31,6 @@ describe("ModulesService", () => {
   );
 
   beforeEach(() => vi.clearAllMocks());
-
-  it("creates a module under an existing project", async () => {
-    projectsRepository.findById.mockResolvedValue({ id: projectId });
-    repository.create.mockImplementation((data) =>
-      Promise.resolve({ ...module, ...data }),
-    );
-
-    const result = await service.create(projectId, {
-      name: "  Planning  ",
-      shortDescription: "  Goal planning and ticket generation.  ",
-    });
-
-    expect(result.name).toBe("Planning");
-    expect(repository.create).toHaveBeenCalledWith({
-      projectId,
-      name: "Planning",
-      shortDescription: "Goal planning and ticket generation.",
-    });
-  });
-
-  it("rejects creating a module for a missing project", async () => {
-    projectsRepository.findById.mockResolvedValue(null);
-
-    await expect(
-      service.create(projectId, {
-        name: "Planning",
-        shortDescription: "Goal planning and ticket generation.",
-      }),
-    ).rejects.toBeInstanceOf(NotFoundError);
-  });
 
   it("lists modules for an existing project", async () => {
     projectsRepository.findById.mockResolvedValue({ id: projectId });

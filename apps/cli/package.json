@@ -22,7 +22,6 @@
     "start": "node dist/main.js",
     "cli": "node dist/bin/goblins.js",
     "start:dev": "tsx ./src/main.ts",
-    "db:push": "drizzle-kit push --config=./drizzle.config.ts",
     "format": "prettier --write .",
     "test:watch": "vitest watch",
     "test": "vitest run",
@@ -31,7 +30,6 @@
     "audit": "pnpm audit --prod --audit-level=high"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.3",
     "@iarna/toml": "^2.2.5",
     "goblins-shared-constants": "workspace:^",
     "@types/swagger-jsdoc": "^6.0.4",
@@ -58,7 +56,6 @@
     "nodemailer": "6.9.14",
     "openai": "^6.16.0",
     "pdfkit": "^0.19.1",
-    "pg": "8.12.0",
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
@@ -80,7 +77,6 @@
     "@types/node": "^20.11.24",
     "@types/nodemailer": "^6.4.16",
     "@types/pdfkit": "^0.17.3",
-    "@types/pg": "^8.11.10",
     "@types/supertest": "^6.0.2",
     "drizzle-kit": "^0.30.5",
     "esbuild": "^0.20.1",

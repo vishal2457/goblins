@@ -32,10 +32,10 @@ export const registerProjectTools: RegisterTools = (server, client) => {
   );
 
   server.registerTool(
-    "projects_create",
+    "projects_add",
     {
-      title: "Create project",
-      description: "Create a Goblins project.",
+      title: "Add project",
+      description: "Register the agent's current project with Goblins. Use the absolute project directory as location when it is not returned by projects_list.",
       inputSchema: {
         name: z.string().trim().min(1).max(255),
         location: z.string().trim().min(1),
@@ -58,7 +58,6 @@ export const registerProjectTools: RegisterTools = (server, client) => {
       inputSchema: {
         id: uuidSchema,
         name: z.string().trim().min(1).max(255).optional(),
-        location: z.string().trim().min(1).optional(),
         description: z.string().trim().nullable().optional(),
       },
     },
@@ -97,25 +96,6 @@ export const registerProjectTools: RegisterTools = (server, client) => {
     },
     withApiErrors((args) =>
       client.request(apiPaths.projectModules(args.projectId)),
-    ),
-  );
-
-  server.registerTool(
-    "project_modules_create",
-    {
-      title: "Create project module",
-      description: "Create a module under a project.",
-      inputSchema: {
-        projectId: uuidSchema,
-        name: z.string().trim().min(1).max(255),
-        shortDescription: z.string().trim().max(1000).optional(),
-      },
-    },
-    withApiErrors(({ projectId, ...body }) =>
-      client.request(apiPaths.projectModules(projectId), {
-        method: "POST",
-        body,
-      }),
     ),
   );
 

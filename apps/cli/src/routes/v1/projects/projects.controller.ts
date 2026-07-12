@@ -14,7 +14,7 @@ export class ProjectsController {
 
   create = asyncHandler(async (req: Request, res: Response) => {
     const project = await this.service.create(req.body as NewProject);
-    success(res, project, "Project created successfully", StatusCodes.CREATED);
+    success(res, project, "Project registered successfully", StatusCodes.CREATED);
   });
 
   findAll = asyncHandler(async (req: Request, res: Response) => {
@@ -56,6 +56,7 @@ export class ProjectsController {
 
   delete = asyncHandler(async (req: Request, res: Response) => {
     const project = await this.service.delete(req.params.id!);
-    success(res, project, "Project deleted successfully");
+    success(res, project, "Project unregistered successfully");
   });
+
 }

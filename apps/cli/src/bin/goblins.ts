@@ -151,7 +151,6 @@ async function start(options: { port: number; host: string }): Promise<void> {
       HOST: options.host,
       PORT: String(options.port),
       NODE_ENV: process.env.NODE_ENV || "development",
-      EMBEDDED_DATABASE_DIR: process.env.EMBEDDED_DATABASE_DIR || ".goblins/pglite",
       ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || url,
     },
     stdio: ["ignore", logFd, logFd],

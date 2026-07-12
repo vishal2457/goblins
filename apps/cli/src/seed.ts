@@ -1,26 +1,11 @@
-import * as dotenv from "dotenv";
-dotenv.config({ path: `${process.cwd()}/.env` });
-
-import { db, closeDB } from "./shared/db/index";
-import { projects } from "./shared/db/schema/index";
+import path from "node:path";
+import { ProjectsRepository } from "./routes/v1/projects/projects.repo";
 
 async function seed() {
-  const [existing] = await db.select().from(projects).limit(1);
-  if (!existing) {
-    await db.insert(projects).values({
-      name: "Goblins",
-      location: process.cwd(),
-      description: "Default Goblins project",
-    });
-    console.log("Created the default project");
-  } else {
-    console.log("A project already exists; nothing to seed");
-  }
-  await closeDB();
+  const repository = new ProjectsRepository();
+  const existing = await repository.findAll(1, 1);
+  if (existing.data.length) return console.log("A project already exists; nothing to seed");
+  await repository.create({ name: path.basename(process.cwd()), location: process.cwd(), description: "Default Goblins project" });
+  console.log("Created .goblins/project.md");
 }
-
-seed().catch(async (error) => {
-  console.error("Seed failed:", error);
-  await closeDB();
-  process.exitCode = 1;
-});
+seed().catch((error) => { console.error("Seed failed:", error); process.exitCode = 1; });

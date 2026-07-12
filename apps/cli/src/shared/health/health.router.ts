@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from "express";
 import { Router as createRouter } from "express";
 import { APP_SETTINGS } from "../app-settings";
-import { checkDBConnection } from "../db";
+import { ensureStore } from "../file-store";
 
 export function createHealthRouter(): Router {
   const router = createRouter();
@@ -21,7 +21,7 @@ export function createHealthRouter(): Router {
 
   router.get("/ready", async (_req: Request, res: Response) => {
     try {
-      await checkDBConnection();
+      await ensureStore();
       res.status(200).json({
         status: "ready",
         timestamp: new Date().toISOString(),

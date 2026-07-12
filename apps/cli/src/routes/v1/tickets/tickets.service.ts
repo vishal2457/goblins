@@ -53,10 +53,7 @@ export class TicketsService {
     const goal = await this.repository.findGoal(ticketData.goalId);
     if (!goal)
       throw new NotFoundError(`Goal with ID ${ticketData.goalId} not found`);
-    await this.ensureModuleBelongsToProject(
-      ticketData.moduleId,
-      goal.projectId,
-    );
+    this.ensureModule(ticketData.moduleId);
 
     for (const dependencyId of dependsOnTicketIds) {
       const dependency = await this.repository.findById(dependencyId);
@@ -121,7 +118,7 @@ export class TicketsService {
       const moduleId = ticketData.moduleId ?? existing.moduleId;
       const goal = await this.goalsRepository.findById(goalId);
       if (!goal) throw new NotFoundError(`Goal with ID ${goalId} not found`);
-      await this.ensureModuleBelongsToProject(moduleId, goal.projectId);
+      this.ensureModule(moduleId);
     }
     const patch = this.withActivityPatch(
       existing,
@@ -302,20 +299,9 @@ export class TicketsService {
     });
   }
 
-  private async ensureModuleBelongsToProject(
-    moduleId: string | undefined,
-    projectId: string,
-  ): Promise<void> {
+  private ensureModule(moduleId: string | undefined): void {
     if (!moduleId) {
       throw new BadRequestError("Ticket moduleId is required");
-    }
-    const module = await this.repository.findModule(moduleId);
-    if (!module)
-      throw new NotFoundError(`Module with ID ${moduleId} not found`);
-    if (module.projectId !== projectId) {
-      throw new BadRequestError(
-        "Ticket module must belong to the goal project",
-      );
     }
   }
 }

@@ -11,15 +11,9 @@ import type { GoalsRepository } from "../goals/goals.repo";
 import type { TicketsRepository } from "./tickets.repo";
 import { TicketsService } from "./tickets.service";
 
-vi.mock("../../../shared/db/index", () => ({
-  db: {},
-}));
-
 const projectId = "21a759ff-944d-4336-a522-4e0b3c57172e";
-const otherProjectId = "9dc0f0e8-f306-4787-95ed-db8f1f11eb9f";
 const goalId = "d97660f9-3a71-413f-8751-f32bd27d2c4a";
 const moduleId = "1f33c48c-fdb1-4904-9b0d-97852f0d81f4";
-const otherModuleId = "2cc6d648-9540-4c10-a693-9f356a9b88de";
 
 const goal = {
   id: goalId,
@@ -135,35 +129,15 @@ describe("TicketsService module assignment", () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it("rejects creating a ticket for a module in another project", async () => {
+  it("creates a ticket with a new module label", async () => {
     repository.findGoal.mockResolvedValue(goal);
-    repository.findModule.mockResolvedValue({
-      ...module,
-      id: otherModuleId,
-      projectId: otherProjectId,
+    repository.findById.mockResolvedValue({
+      ...ticket,
+      moduleId: "api",
     });
 
-    await expect(
-      service.create({
-        goalId,
-        moduleId: otherModuleId,
-        title: "Implement lifecycle",
-      }),
-    ).rejects.toBeInstanceOf(BadRequestError);
-  });
-
-  it("rejects updating a ticket to a module in another project", async () => {
-    repository.findById.mockResolvedValue(ticket);
-    goalsRepository.findById.mockResolvedValue(goal);
-    repository.findModule.mockResolvedValue({
-      ...module,
-      id: otherModuleId,
-      projectId: otherProjectId,
-    });
-
-    await expect(
-      service.update(ticket.id, { moduleId: otherModuleId }),
-    ).rejects.toBeInstanceOf(BadRequestError);
+    const result = await service.create({ goalId, moduleId: "api", title: "Implement lifecycle" });
+    expect(result.moduleId).toBe("api");
   });
 
   it("updates a ticket to a module in the same project", async () => {

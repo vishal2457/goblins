@@ -3,7 +3,7 @@ dotenv.config({ path: `${process.cwd()}/.env` });
 import http from "http";
 import app from "./express-app";
 import { APP_SETTINGS } from "./shared/app-settings";
-import { checkDBConnection, closeDB, initializeDB } from "./shared/db";
+import { ensureStore } from "./shared/file-store";
 import cluster from "cluster";
 import os from "os";
 import { logger } from "./shared/logger";
@@ -35,13 +35,6 @@ function gracefulShutdown(
       });
       logger.info("http_server_closed");
 
-      try {
-        await closeDB();
-        logger.info("db_pool_closed");
-      } catch (err) {
-        logger.error("db_pool_close_error", { error: (err as Error).message });
-      }
-
       logger.info("graceful_shutdown_complete");
       process.exit(0);
     } catch (err) {
@@ -72,8 +65,7 @@ function gracefulShutdown(
 
 async function startServer() {
   try {
-    await initializeDB();
-    await checkDBConnection();
+    await ensureStore();
 
     const server = http.createServer(app);
     gracefulShutdown(server);

@@ -13,8 +13,6 @@ const {
   JWT_ISSUER = "goblins-api",
   JWT_AUDIENCE = "goblins-clients",
   ALLOWED_ORIGINS = "http://localhost:3000",
-  DATABASE_URL = "",
-  EMBEDDED_DATABASE_DIR = ".goblins/pglite",
   TRUST_PROXY,
   REQUEST_BODY_LIMIT = "1mb",
   HSTS_MAX_AGE = "63072000",
@@ -26,7 +24,6 @@ const {
 if (isProd) {
   const requiredEnvVars = [
     "JWT_SECRET",
-    "DATABASE_URL",
     "ALLOWED_ORIGINS",
   ];
   const missingVars = requiredEnvVars.filter(
@@ -75,9 +72,6 @@ export const APP_SETTINGS = {
   JWT_ISSUER,
   JWT_AUDIENCE,
   ALLOWED_ORIGIN_LIST: parseOrigins(ALLOWED_ORIGINS),
-  DATABASE_URL,
-  USE_EMBEDDED_DATABASE: DATABASE_URL.trim().length === 0,
-  EMBEDDED_DATABASE_DIR,
   TRUST_PROXY: parseTrustProxy(TRUST_PROXY),
   REQUEST_BODY_LIMIT,
   HSTS: {

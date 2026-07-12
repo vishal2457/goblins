@@ -11,7 +11,7 @@ export const ticketListQuerySchema = z.object({
 
 export const createTicketSchema = z.object({
   goalId: z.string().uuid(),
-  moduleId: z.string().uuid(),
+  moduleId: z.string().trim().min(1).max(255),
   currentStepId: z.string().uuid().nullable().optional(),
   title: z.string().trim().min(1).max(255),
   shortDescription: z.string().trim().max(1000).optional(),

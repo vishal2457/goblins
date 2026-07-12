@@ -6,7 +6,7 @@
 
 `GET /api/v1/projects?page=1&limit=25`
 
-### Create project
+### Register project
 
 `POST /api/v1/projects`
 
@@ -18,6 +18,11 @@
 }
 ```
 
+The location must be an existing absolute directory. Registration creates
+`<location>/.goblins` and adds the project to `~/.goblins/projects.json`.
+MCP agents can perform the same operation with `projects_add` after checking
+`projects_list` for their current working directory.
+
 ### Get project
 
 `GET /api/v1/projects/{id}`
@@ -26,7 +31,8 @@
 
 `PATCH /api/v1/projects/{id}`
 
-Use any subset of create-project fields.
+Only `name` and `description` can be updated. Register a different absolute
+directory as another project.
 
 ### Delete project
 
@@ -38,16 +44,8 @@ Use any subset of create-project fields.
 
 `GET /api/v1/projects/{id}/modules`
 
-### Create module for a project
-
-`POST /api/v1/projects/{id}/modules`
-
-```json
-{
-  "name": "Backend",
-  "shortDescription": "Express API and database work"
-}
-```
+Modules are derived from the `moduleId` labels in the project's ticket files;
+there is no module creation endpoint or modules storage directory.
 
 ### List tickets for a module
 
@@ -55,7 +53,7 @@ Use any subset of create-project fields.
 
 ## Discovered Subagents
 
-Subagents are discovered from files. They are not stored in the database.
+Subagents are discovered from files. They are not stored separately.
 
 For Goblins orchestration, prefer subagents that are already available from project-local or global user configuration in the current environment. Use project-agent discovery only when that local/global set is empty.
 

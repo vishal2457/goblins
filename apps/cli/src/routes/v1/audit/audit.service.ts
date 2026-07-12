@@ -30,7 +30,7 @@ export class AuditService {
       userId: user?.id,
       userName: user?.name ?? user?.username,
       userEmail: user?.email,
-      ipAddress: req?.ip ?? req?.socket?.remoteAddress ?? undefined,
+      ipAddress: req?.ip ?? req?.socket?.remoteAddress,
       userAgent: req?.headers?.["user-agent"],
       metadata: req
         ? {

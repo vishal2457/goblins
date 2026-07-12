@@ -217,13 +217,6 @@ export async function listProjectModules(
   return getResult<ProjectModule[]>(API_PATHS.projectModules(projectId));
 }
 
-export async function createProjectModule(
-  projectId: string,
-  data: { name: string; shortDescription?: string },
-): Promise<ProjectModule> {
-  return postResult<ProjectModule>(API_PATHS.projectModules(projectId), data);
-}
-
 export async function discoverProjectAgents(
   projectId: string,
 ): Promise<DiscoveredAgentsResponse> {

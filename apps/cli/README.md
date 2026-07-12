@@ -49,6 +49,6 @@ express-backend/
 │ │ ├── db-prisma/ # Prisma ORM configuration and client
 │ │ ├── middlewares/ # Custom Express middlewares
 │ │ └── utils/ # Common helper functions
-├── drizzle.config.ts # Database schema orchestration configuration
+├── src/shared/file-store.ts # Markdown/frontmatter persistence
 ├── Dockerfile # Containerization setup
 └── package.json # Project dependencies and scripts

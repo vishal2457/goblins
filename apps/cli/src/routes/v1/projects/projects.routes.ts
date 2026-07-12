@@ -2,7 +2,6 @@ import { Router } from "express";
 import { validate } from "../../../shared/middlewares/validation.middleware";
 import { ProjectsController } from "./projects.controller";
 import { ModulesController } from "../modules/modules.controller";
-import { createModuleSchema } from "../modules/modules.validation";
 import {
   createProjectSchema,
   projectIdParamSchema,
@@ -20,15 +19,15 @@ projectsRouter.get(
   validate({ query: projectListQuerySchema }),
   controller.findAll,
 );
+projectsRouter.post(
+  "/",
+  validate({ body: createProjectSchema }),
+  controller.create,
+);
 projectsRouter.get(
   "/:id/modules",
   validate({ params: projectIdParamSchema }),
   modulesController.findByProject,
-);
-projectsRouter.post(
-  "/:id/modules",
-  validate({ params: projectIdParamSchema, body: createModuleSchema }),
-  modulesController.createForProject,
 );
 projectsRouter.get(
   "/:id/agents",
@@ -48,11 +47,6 @@ projectsRouter.get(
   validate({ params: projectIdParamSchema }),
   controller.findById,
 );
-projectsRouter.post(
-  "/",
-  validate({ body: createProjectSchema }),
-  controller.create,
-);
 projectsRouter.put(
   "/:id",
   validate({ params: projectIdParamSchema, body: updateProjectSchema }),
@@ -68,5 +62,4 @@ projectsRouter.delete(
   validate({ params: projectIdParamSchema }),
   controller.delete,
 );
-
 export { projectsRouter };

@@ -1,6 +1,5 @@
 import {
   createProject,
-  createProjectModule,
   discoverProjectAgents,
   getProject,
   listProjectModules,
@@ -16,7 +15,6 @@ export const projectApi = {
   update: updateProject,
   modules: {
     list: listProjectModules,
-    create: createProjectModule,
   },
   agents: {
     discover: discoverProjectAgents,

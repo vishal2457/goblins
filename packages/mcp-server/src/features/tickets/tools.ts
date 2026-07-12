@@ -45,7 +45,7 @@ export const registerTicketTools: RegisterTools = (server, client) => {
       description: "Create a Goblins ticket.",
       inputSchema: {
         goalId: uuidSchema,
-        moduleId: uuidSchema,
+        moduleId: z.string().trim().min(1).max(255),
         currentStepId: uuidSchema.nullable().optional(),
         title: z.string().trim().min(1).max(255),
         shortDescription: z.string().trim().max(1000).optional(),
@@ -116,7 +116,7 @@ export const registerTicketTools: RegisterTools = (server, client) => {
       inputSchema: {
         id: uuidSchema,
         goalId: uuidSchema.optional(),
-        moduleId: uuidSchema.optional(),
+        moduleId: z.string().trim().min(1).max(255).optional(),
         currentStepId: uuidSchema.nullable().optional(),
         title: z.string().trim().min(1).max(255).optional(),
         shortDescription: z.string().trim().max(1000).optional(),
@@ -231,7 +231,7 @@ export const registerTicketTools: RegisterTools = (server, client) => {
       title: "List module tickets",
       description: "List tickets for a module.",
       inputSchema: {
-        moduleId: uuidSchema,
+        moduleId: z.string().trim().min(1).max(255),
       },
     },
     withApiErrors((args) =>

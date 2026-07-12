@@ -5,7 +5,7 @@ import { ProjectsRepository, type ProjectList } from "./projects.repo";
 export class ProjectsService {
   constructor(private readonly repository = new ProjectsRepository()) {}
 
-  async create(data: NewProject): Promise<Project> {
+  create(data: NewProject): Promise<Project> {
     return this.repository.create(data);
   }
 
@@ -30,4 +30,5 @@ export class ProjectsService {
     if (!project) throw new NotFoundError(`Project with ID ${id} not found`);
     return project;
   }
+
 }

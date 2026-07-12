@@ -1,7 +1,4 @@
-import type {
-  NewProjectModule,
-  ProjectModule,
-} from "../../../shared/db/schema/projects";
+import type { ProjectModule } from "../../../shared/db/schema/projects";
 import { NotFoundError } from "../../../shared/utils/http-errors.util";
 import { ProjectsRepository } from "../projects/projects.repo";
 import {
@@ -10,29 +7,12 @@ import {
 } from "../tickets/tickets.repo";
 import { ModulesRepository } from "./modules.repo";
 
-export type CreateModuleRequest = Pick<
-  NewProjectModule,
-  "name" | "shortDescription"
->;
-
 export class ModulesService {
   constructor(
     private readonly repository = new ModulesRepository(),
     private readonly projectsRepository = new ProjectsRepository(),
     private readonly ticketsRepository = new TicketsRepository(),
   ) {}
-
-  async create(
-    projectId: string,
-    data: CreateModuleRequest,
-  ): Promise<ProjectModule> {
-    await this.ensureProject(projectId);
-    return this.repository.create({
-      projectId,
-      name: data.name.trim(),
-      shortDescription: data.shortDescription?.trim() ?? "",
-    });
-  }
 
   async findByProject(projectId: string): Promise<ProjectModule[]> {
     await this.ensureProject(projectId);

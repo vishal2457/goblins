@@ -15,7 +15,10 @@ export const createProjectSchema = z.object({
   description: z.string().trim().nullable().optional(),
 });
 
-export const updateProjectSchema = createProjectSchema
+export const updateProjectSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().nullable().optional(),
+})
   .partial()
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field is required",

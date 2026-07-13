@@ -201,14 +201,10 @@ describe("GoalsService self-improvement", () => {
     workflowService.getWorkflow.mockReturnValue({
       content: "# Workflow\n",
       sourcePath: "/tmp/workflow.md",
-      isCustomized: true,
-      presets: [],
     });
     workflowService.updateWorkflow.mockReturnValue({
       content: workflowProposal.proposedInstructions,
       sourcePath: "/tmp/workflow.md",
-      isCustomized: true,
-      presets: [],
     });
   });
 

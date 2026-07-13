@@ -9,9 +9,6 @@ export const API_PATHS = {
     `${API_V1_PREFIX}/projects/${id}/agents/instructions`,
 
   workflow: `${API_V1_PREFIX}/workflow`,
-  workflowPresets: `${API_V1_PREFIX}/workflow/presets`,
-  workflowPreset: (id: string) => `${API_V1_PREFIX}/workflow/presets/${id}`,
-  workflowReset: `${API_V1_PREFIX}/workflow/reset`,
 
   moduleTickets: (id: string) => `${API_V1_PREFIX}/modules/${id}/tickets`,
 

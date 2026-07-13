@@ -14,7 +14,6 @@ import type {
   TicketComment,
   TicketCommentKind,
   WorkflowDocument,
-  WorkflowPreset,
 } from "goblins-shared-constants";
 import { apiClient } from "./client";
 
@@ -250,20 +249,6 @@ export async function updateWorkflow(data: {
   );
 
   return response.result;
-}
-
-export async function resetWorkflow(): Promise<WorkflowDocument> {
-  return postResult<WorkflowDocument>(API_PATHS.workflowReset);
-}
-
-export async function listWorkflowPresets(): Promise<WorkflowPreset[]> {
-  return getResult<WorkflowPreset[]>(API_PATHS.workflowPresets);
-}
-
-export async function applyWorkflowPreset(
-  id: string,
-): Promise<WorkflowDocument> {
-  return postResult<WorkflowDocument>(API_PATHS.workflowPreset(id));
 }
 
 export async function listGoals(projectId?: string): Promise<Goal[]> {

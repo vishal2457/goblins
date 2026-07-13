@@ -17,24 +17,4 @@ export class WorkflowController {
       "Workflow updated successfully",
     );
   });
-
-  reset = asyncHandler(async (_req: Request, res: Response) => {
-    success(res, this.service.resetWorkflow(), "Workflow reset successfully");
-  });
-
-  presets = asyncHandler(async (_req: Request, res: Response) => {
-    success(
-      res,
-      this.service.listPresets(),
-      "Workflow presets retrieved successfully",
-    );
-  });
-
-  applyPreset = asyncHandler(async (req: Request, res: Response) => {
-    success(
-      res,
-      this.service.applyPreset(req.params.id!),
-      "Workflow preset applied successfully",
-    );
-  });
 }

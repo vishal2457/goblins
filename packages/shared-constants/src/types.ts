@@ -156,19 +156,9 @@ export interface DiscoveredAgentsResponse {
   >;
 }
 
-export interface WorkflowPreset {
-  id: string;
-  name: string;
-  description: string;
-  teamType: "software" | "marketing" | "leadership" | "general";
-  content: string;
-}
-
 export interface WorkflowDocument {
   content: string;
   sourcePath: string;
-  isCustomized: boolean;
-  presets: WorkflowPreset[];
 }
 
 export interface Goal {

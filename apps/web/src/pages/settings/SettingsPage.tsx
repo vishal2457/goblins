@@ -37,8 +37,6 @@ import { ProjectsTab } from "./components/ProjectsTab";
 import { SubagentsTab } from "./components/SubagentsTab";
 import { WorkflowTab } from "./components/WorkflowTab";
 import {
-  useApplyWorkflowPresetMutation,
-  useResetWorkflowMutation,
   useUpdateWorkflowMutation,
   useWorkflowQuery,
 } from "../../shared/api/features/workflow/workflow.queries";
@@ -68,8 +66,6 @@ export function SettingsPage() {
     useUpdateProjectAgentInstructionsMutation(selectedProjectId);
   const workflowQuery = useWorkflowQuery();
   const updateWorkflowMutation = useUpdateWorkflowMutation();
-  const resetWorkflowMutation = useResetWorkflowMutation();
-  const applyWorkflowPresetMutation = useApplyWorkflowPresetMutation();
 
   const goToTab = (nextTab: SettingsTab) => {
     navigate(`/settings/${nextTab}`, { replace: true });
@@ -261,15 +257,7 @@ export function SettingsPage() {
               saveWorkflow={(content) =>
                 updateWorkflowMutation.mutateAsync({ content })
               }
-              resetWorkflow={() => resetWorkflowMutation.mutateAsync()}
-              applyPreset={(presetId) =>
-                applyWorkflowPresetMutation.mutateAsync(presetId)
-              }
-              isSaving={
-                updateWorkflowMutation.isPending ||
-                resetWorkflowMutation.isPending ||
-                applyWorkflowPresetMutation.isPending
-              }
+              isSaving={updateWorkflowMutation.isPending}
             />
           )}
         </div>

@@ -8,6 +8,7 @@
     "build": "turbo run build",
     "build:cli": "node scripts/build-cli-package.mjs",
     "pack:cli": "pnpm run build:cli && pnpm --filter goblins-cli pack",
+    "publish:cli": "node scripts/publish-cli-package.mjs",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
